@@ -40,10 +40,10 @@ _arges setDir _dir;
 _arges setPosATL _pos;
 _arges setName (name _player);
 
-// TacGirls' config init (hitboxinit.sqf) fires on createUnit and calls allowDamage false.
-// Override immediately: we need HandleDamage to fire on the client, and ACE medical
-// must be able to process hits without triggering the "damage blocked" setDead warning.
-_arges allowDamage true;
+// allowDamage false: engine ignores HandleDamage return values and applies 0 to all
+// native hitpoints. HandleDamage still fires — our HP pool code still runs — but ACE
+// can never accumulate hitpoints to a fatal level regardless of EH ordering.
+_arges allowDamage false;
 
 // Aegis combat buffs — applied immediately on the server and maintained on the client.
 // These run regardless of whether the player activates Corvus (Corvus's own SysInit PFH
@@ -146,13 +146,13 @@ private _damageFilter = {
     if (_hitPoint isEqualTo "")                              exitWith { 0 };
 
     // Non-projectile call (environmental, engine internal): absorb silently
-    if (_projectile isEqualTo "")                            exitWith { _unit getHitPointDamage _hitPoint };
+    if (_projectile isEqualTo "")                            exitWith { 0 };
 
     // Read ammo hit value — same number TacGirls reads from HitPart's _ammo select 0
     private _hit = getNumber (configFile >> "CfgAmmo" >> _projectile >> "hit");
 
     // Sub-rifle immunity: pistols, birdshot, anything below rifle threshold
-    if (_hit < 8)                                            exitWith { _unit getHitPointDamage _hitPoint };
+    if (_hit < 8)                                            exitWith { 0 };
 
     // Corvus active: player manually activated the system via ACE self-action.
     // Corvus's ACE hook (COR_fnc_damage) owns armor drain, wound clearing, and death
@@ -297,18 +297,17 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
 [{
     params ["_arges", "_damageFilter"];
 
-    // hitboxinit.sqf (TacGirls CfgVehicles.EventHandlers.init) runs on ALL machines and
-    // calls allowDamage false. The init EH is spawned-async by the engine's network sync
-    // so it can arrive on the client AFTER our one-shot override on busy frames (cycle 4
-    // instant-kill root cause). Maintain the override via a 1 s PFH until Arges is gone.
-    _arges allowDamage true;
+    // allowDamage false: engine applies 0 to all native hitpoints regardless of any
+    // HandleDamage EH return value (including ACE's). HandleDamage still fires so our
+    // HP pool accounting runs, but ACE can never accumulate hitpoints to fatal levels.
+    _arges allowDamage false;
     _arges enableStamina false;
     _arges setAnimSpeedCoef 1.4;
     _arges setUnitRecoilCoefficient 0.1;
     _arges setCustomAimCoef 0.05;
 
-    // Every 1 s: maintain allowDamage true + AE_Health override + combat buffs.
-    // hitboxinit.sqf fires async on clients and can reset both; PFH beats it each second.
+    // Every 1 s: maintain allowDamage false + AE_Health override + combat buffs.
+    // Ensures no async init EH from another mod can flip allowDamage back to true.
     // Buffs are maintained here for the no-Corvus path; Corvus's own SysInit PFH maintains
     // them when Corvus is active (both write the same values, no conflict).
     [{
@@ -317,7 +316,7 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         if (!alive _arges || _arges getVariable ["GFL_ArgesState", "NONE"] != "ARGES") then {
             [_handle] call CBA_fnc_removePerFrameHandler;
         } else {
-            _arges allowDamage true;
+            _arges allowDamage false;
             _arges setVariable ["AE_Health", 9999, true];
             _arges enableStamina false;
             _arges setAnimSpeedCoef 1.4;
