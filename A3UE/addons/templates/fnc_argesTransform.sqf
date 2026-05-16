@@ -175,17 +175,15 @@ private _damageFilter = {
     if (!isNil "ace_medical_fnc_fullHeal") then { _unit call ace_medical_fnc_fullHeal; };
 
     // HP cost by hit tier:
-    //   hit  8–29  → 2   rifle/SMG (5.56, 5.45, 7.62x39, 7.62x51, .338…)   750 hits to drain
-    //   hit 30–99  → 5   .50 BMG, HMG, heavy AP                             300 hits to drain
-    //   hit 100–299→ 7   light explosive (grenades, 40mm, small IED)        ~214 hits to drain
-    //   hit 300–999→ 10  heavy explosive (RPG, ATGM, cannon shell)          150 hits to drain
-    //   hit 1000+  → 15  heavy ordnance (bombs, artillery, JDAM)            100 hits to drain
+    //   hit  8–29 → 2   rifle/SMG (5.56, 5.45, 7.62x39, 7.62x51, .338…)  750 hits to drain
+    //   hit 30–99 → 5   .50 BMG, HMG, heavy AP                            300 hits to drain
+    //   hit 100–299→ 7  light explosive (grenades, 40mm)                  ~214 hits to drain
+    //   hit 300+  → 15  heavy explosive (RPG, ATGM, bombs, artillery)     100 hits to drain
     private _cost = switch (true) do {
-        case (_hit < 30):   { 2  };
-        case (_hit < 100):  { 5  };
-        case (_hit < 300):  { 7  };
-        case (_hit < 1000): { 10 };
-        default:            { 15 };
+        case (_hit < 30):  { 2  };
+        case (_hit < 100): { 5  };
+        case (_hit < 300): { 7  };
+        default            { 15 };
     };
     private _hp   = (_unit getVariable ["GFL_ArgesHP", 100]) - _cost;
     _unit setVariable ["GFL_ArgesHP", _hp max 0, true];
