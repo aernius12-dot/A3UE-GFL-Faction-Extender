@@ -167,9 +167,12 @@ private _damageFilter = {
     // filter, no hit-location logic. "Headshot immunity" means sniper rounds cost the same
     // 10 HP as a body shot rather than being an instant kill — not that head hits are absorbed.
 
-    // ACE suppression (Branch 2): handled by the ACE_Medical_Injuries class EH registered in
-    // fnc_argesInit.sqf — fullHeal fires synchronously inside ACE's chain, before ACE's vitals
-    // PFH runs. Branch 3 (Corvus): COR_fnc_damage owns ACE state via its own ACE_Medical_Injuries.
+    // Branch 2 (ACE present, no Corvus): clear ACE wounds inside this HandleDamage callback.
+    // Our EH fires after ACE's (ACE registers at mission start via XEH config; we register
+    // after transform). ACE creates wounds in its EH, then we call fullHeal here in the same
+    // physics tick — before ACE's vitals PFH (scheduled context) can trigger cardiac arrest.
+    // Branch 3 (Corvus active) already returned 0 above; this only runs on the no-Corvus path.
+    if (!isNil "ace_medical_fnc_fullHeal") then { _unit call ace_medical_fnc_fullHeal; };
 
     // Drain HP pool
     private _cost = if (_hit >= 100) then { 15 } else { 5 };
@@ -432,11 +435,26 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
 
     // Three-branch damage handler:
     //   Branch 1 (no ACE): _damageFilter manages HP pool, returns 0. No ACE interaction.
-    //   Branch 2 (ACE, no Corvus): ACE_Medical_Injuries hook (fnc_argesInit.sqf) calls
-    //     ace_medical_fnc_fullHeal synchronously inside ACE's chain. No EH manipulation.
-    //   Branch 3 (Corvus active): _damageFilter returns 0 (COR_SysEnabled check). Corvus's
-    //     COR_fnc_damage runs via its own CfgVehicles ACE_Medical_Injuries entry.
+    //   Branch 2 (ACE, no Corvus): primary — fullHeal inside _damageFilter (same physics tick
+    //     as ACE's EH, before vitals PFH). Secondary — per-unit CBA_fnc_addEventHandler below
+    //     clears _allDamages by-ref so ACE has no wound data to process.
+    //   Branch 3 (Corvus): _damageFilter returns 0 early; COR_fnc_damage owns ACE state.
     _arges addEventHandler ["HandleDamage", _damageFilter];
+
+    // Branch 2 secondary: per-unit ACE_Medical_Injuries handler via CBA's local event system.
+    // CBA_fnc_addClassEventHandler (class-level) does not intercept CBA_fnc_localEvent fires.
+    // CBA_fnc_addEventHandler (per-unit) does. Clears _allDamages by reference so ACE
+    // has nothing to process for wound creation, mirroring COR_fnc_damage's resize 0 exactly.
+    if (!isNil "ace_medical_fnc_fullHeal") then {
+        [_arges, "ACE_Medical_Injuries", {
+            params ["_unit", "_allDamages"];
+            if (_unit getVariable ["COR_SysEnabled", false]) exitWith {};
+            _unit call ace_medical_fnc_fullHeal;
+            _allDamages resize 0;
+            diag_log "[GFL Arges] ACE_Medical_Injuries: fullHeal+resize called";
+        }] call CBA_fnc_addEventHandler;
+        diag_log "[GFL Arges] ACE_Medical_Injuries per-unit EH registered";
+    };
 
     // Death redirect — fires synchronously on the client BEFORE A3A's fn_onPlayerRespawn
     // reads _oldUnit.owner. A3A checks: if (owner != self) → selectPlayer owner; deleteVehicle _newUnit.
