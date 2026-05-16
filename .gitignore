@@ -1,0 +1,41 @@
+# Inspection / reference folders (decompiled third-party PBOs, not part of build)
+_inspect_*/
+
+# Build output
+build/
+
+# hemtt build cache (created at project root during builds)
+.hemtt/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Claude Code
+.claude/
+
+# Image source files (keep .paa, ignore raw sources)
+*.png
+*.xcf
+*.psd
+
+# Arma build artifacts
+*.bak
+*.log
+*.bisign
+*.bikey
+
+# Third-party tool binaries — obtain from their respective sources:
+#   hemtt.exe      → github.com/BrettMayson/HEMTT/releases
+#   DSSignFile/*   → Arma 3 Tools (Steam app 233800)
+*.exe
+*.dll
+
+# Third-party dev tools (not part of mod source)
+# StreetArtist: nav-grid editor, get from its own repo if needed
+Tools/StreetArtist/
+
+# Windows
+Thumbs.db
+desktop.ini
