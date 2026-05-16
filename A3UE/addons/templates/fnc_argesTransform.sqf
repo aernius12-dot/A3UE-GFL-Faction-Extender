@@ -151,7 +151,7 @@ private _damageFilter = {
     // Read ammo hit value — same number TacGirls reads from HitPart's _ammo select 0
     private _hit = getNumber (configFile >> "CfgAmmo" >> _projectile >> "hit");
 
-    // Small-calibre immunity (9 mm pistols and lighter, hit < 8)
+    // Sub-rifle immunity: pistols, birdshot, anything below rifle threshold
     if (_hit < 8)                                            exitWith { _unit getHitPointDamage _hitPoint };
 
     // Corvus active: player manually activated the system via ACE self-action.
@@ -174,8 +174,19 @@ private _damageFilter = {
     // Branch 3 (Corvus active) already returned 0 above; this only runs on the no-Corvus path.
     if (!isNil "ace_medical_fnc_fullHeal") then { _unit call ace_medical_fnc_fullHeal; };
 
-    // Drain HP pool
-    private _cost = if (_hit >= 100) then { 15 } else { 5 };
+    // HP cost by hit tier:
+    //   hit  8–29  → 2   rifle/SMG (5.56, 5.45, 7.62x39, 7.62x51, .338…)   750 hits to drain
+    //   hit 30–99  → 5   .50 BMG, HMG, heavy AP                             300 hits to drain
+    //   hit 100–299→ 7   light explosive (grenades, 40mm, small IED)        ~214 hits to drain
+    //   hit 300–999→ 10  heavy explosive (RPG, ATGM, cannon shell)          150 hits to drain
+    //   hit 1000+  → 15  heavy ordnance (bombs, artillery, JDAM)            100 hits to drain
+    private _cost = switch (true) do {
+        case (_hit < 30):   { 2  };
+        case (_hit < 100):  { 5  };
+        case (_hit < 300):  { 7  };
+        case (_hit < 1000): { 10 };
+        default:            { 15 };
+    };
     private _hp   = (_unit getVariable ["GFL_ArgesHP", 100]) - _cost;
     _unit setVariable ["GFL_ArgesHP", _hp max 0, true];
 
