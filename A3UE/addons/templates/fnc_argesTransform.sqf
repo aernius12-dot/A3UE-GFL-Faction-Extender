@@ -336,9 +336,13 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
             [_handle] call CBA_fnc_removePerFrameHandler;
         };
 
-        // ACE suppression: handled synchronously by ACE_Medical_Injuries hook (fnc_argesInit.sqf).
-        // Branch 2: fullHeal fires inside ACE's HandleDamage chain on every hit.
-        // Branch 3: COR_fnc_damage owns ACE state — our hook exits early when COR_SysEnabled.
+        // ACE suppression: continuous fullHeal every 0.25 s clears wounds before ACE's vitals
+        // PFH (cadence ~1–2 s) can escalate cardiac arrest to setDead. Per-hit fullHeal in
+        // _damageFilter is not enough — ACE vitals PFH runs between hits during heavy burst fire.
+        // Corvus handles ACE state when active (COR_fnc_damage owns it), so we skip here.
+        if (!isNil "ace_medical_fnc_fullHeal" && !(_arges getVariable ["COR_SysEnabled", false])) then {
+            _arges call ace_medical_fnc_fullHeal;
+        };
 
         // Job 1 — Corvus override: runs every tick while Corvus is active.
         //
@@ -444,26 +448,11 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
 
     // Three-branch damage handler:
     //   Branch 1 (no ACE): _damageFilter manages HP pool, returns 0. No ACE interaction.
-    //   Branch 2 (ACE, no Corvus): primary — fullHeal inside _damageFilter (same physics tick
-    //     as ACE's EH, before vitals PFH). Secondary — per-unit CBA_fnc_addEventHandler below
-    //     clears _allDamages by-ref so ACE has no wound data to process.
+    //   Branch 2 (ACE, no Corvus): fullHeal in _damageFilter (per-hit) + continuous 0.25 s PFH.
+    //     CBA_fnc_addEventHandler for ACE_Medical_Injuries was tried and does not intercept
+    //     ACE's localEvent fires in this ACE version — omitted.
     //   Branch 3 (Corvus): _damageFilter returns 0 early; COR_fnc_damage owns ACE state.
     _arges addEventHandler ["HandleDamage", _damageFilter];
-
-    // Branch 2 secondary: per-unit ACE_Medical_Injuries handler via CBA's local event system.
-    // CBA_fnc_addClassEventHandler (class-level) does not intercept CBA_fnc_localEvent fires.
-    // CBA_fnc_addEventHandler (per-unit) does. Clears _allDamages by reference so ACE
-    // has nothing to process for wound creation, mirroring COR_fnc_damage's resize 0 exactly.
-    if (!isNil "ace_medical_fnc_fullHeal") then {
-        [_arges, "ACE_Medical_Injuries", {
-            params ["_unit", "_allDamages"];
-            if (_unit getVariable ["COR_SysEnabled", false]) exitWith {};
-            _unit call ace_medical_fnc_fullHeal;
-            _allDamages resize 0;
-            diag_log "[GFL Arges] ACE_Medical_Injuries: fullHeal+resize called";
-        }] call CBA_fnc_addEventHandler;
-        diag_log "[GFL Arges] ACE_Medical_Injuries per-unit EH registered";
-    };
 
     // Death redirect — fires synchronously on the client BEFORE A3A's fn_onPlayerRespawn
     // reads _oldUnit.owner. A3A checks: if (owner != self) → selectPlayer owner; deleteVehicle _newUnit.
