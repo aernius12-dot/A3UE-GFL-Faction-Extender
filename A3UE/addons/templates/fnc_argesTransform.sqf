@@ -336,14 +336,6 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
             [_handle] call CBA_fnc_removePerFrameHandler;
         };
 
-        // ACE suppression: continuous fullHeal every 0.25 s clears wounds before ACE's vitals
-        // PFH (cadence ~1–2 s) can escalate cardiac arrest to setDead. Per-hit fullHeal in
-        // _damageFilter is not enough — ACE vitals PFH runs between hits during heavy burst fire.
-        // Corvus handles ACE state when active (COR_fnc_damage owns it), so we skip here.
-        if (!isNil "ace_medical_fnc_fullHeal" && !(_arges getVariable ["COR_SysEnabled", false])) then {
-            _arges call ace_medical_fnc_fullHeal;
-        };
-
         // Job 1 — Corvus override: runs every tick while Corvus is active.
         //
         // Armor boost (+1200): applied once on first activation; COR_FrameArmor updated so

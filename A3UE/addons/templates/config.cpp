@@ -45,6 +45,18 @@ class cfgFunctions {
             PATHTO_FNC(argesInit);
             PATHTO_FNC(argesTransform);
             PATHTO_FNC(argesRevert);
+            PATHTO_FNC(argesWoundHandler);
+        };
+    };
+};
+
+// Prevent ACE cardiac arrest on Arges_F units (Branch 2: ACE present, Corvus inactive).
+// COR_fnc_damage exits early for Arges when COR_SysEnabled=false; our handler fills the gap.
+// _allDamages resize 0 mirrors Corvus's approach: ACE applies no wounds after all handlers run.
+class ACE_Medical_Injuries {
+    class damageTypes {
+        class woundHandlers {
+            GFL_Arges_Wounds = "GFL_fnc_argesWoundHandler";
         };
     };
 };
