@@ -167,15 +167,9 @@ private _damageFilter = {
     // filter, no hit-location logic. "Headshot immunity" means sniper rounds cost the same
     // 10 HP as a body shot rather than being an instant kill — not that head hits are absorbed.
 
-    // ACE Medical synchronous suppression — no-Corvus path.
-    // ACE creates wounds and checks traumatic cardiac arrest in its own HandleDamage hook,
-    // which fires before ours (ACE registers via XEH at mission start; we register later).
-    // Our 0.25s PFH clears wounds too slowly — cardiac arrest can trigger within the same
-    // burst frame. Clearing here, in the same EH chain as the hit, beats ACE's arrest check.
-    _unit setVariable ["ace_medical_openWounds",  createHashMap];
-    _unit setVariable ["ace_medical_pain",        0];
-    _unit setVariable ["ace_medical_bloodVolume", 6.0];
-    _unit setVariable ["ace_medical_heartRate",   80];
+    // ACE suppression (Branch 2): handled by the ACE_Medical_Injuries class EH registered in
+    // fnc_argesInit.sqf — fullHeal fires synchronously inside ACE's chain, before ACE's vitals
+    // PFH runs. Branch 3 (Corvus): COR_fnc_damage owns ACE state via its own ACE_Medical_Injuries.
 
     // Drain HP pool
     private _cost = if (_hit >= 100) then { 15 } else { 5 };
@@ -330,28 +324,9 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
             [_handle] call CBA_fnc_removePerFrameHandler;
         };
 
-        // ACE Medical suppression — no-Corvus path only.
-        // ACE reads raw incoming _damage before HandleDamage returns, creating wounds
-        // independently of our return value. Blood loss + cardiac arrest from a full-auto
-        // burst can kill Arges before our HP pool reaches 0.
-        // Fix: reset blood volume, heart rate, and open wounds every 0.25 s so ACE's vitals
-        // PFH never accumulates enough deficit to trigger its own death path.
-        // When Corvus IS active we skip this entirely — Corvus owns the medical model and
-        // ACE's wound tracking feeds correctly into COR_Shutdown via heat/damage.
-        // Pain suppression: always — pain drives ACE flinch/prone animations but does not
-        // affect Corvus heat, armor depletion, or COR_Shutdown, so safe to clear both paths.
-        _arges setVariable ["ace_medical_pain", 0];
-
-        // Cardiac-arrest prevention: no-Corvus path only.
-        // Blood volume and heart rate are the two gating values for ACE's death path.
-        // Clearing openWounds (HashMap — NOT array) prevents pain from re-accumulating
-        // between PFH ticks, which keeps prone animations suppressed.
-        // When Corvus is active, ACE wound tracking feeds into its fluid-loss math correctly.
-        if (!(_arges getVariable ["COR_SysEnabled", false])) then {
-            _arges setVariable ["ace_medical_bloodVolume", 6.0];
-            _arges setVariable ["ace_medical_heartRate",   80];
-            _arges setVariable ["ace_medical_openWounds",  createHashMap];
-        };
+        // ACE suppression: handled synchronously by ACE_Medical_Injuries hook (fnc_argesInit.sqf).
+        // Branch 2: fullHeal fires inside ACE's HandleDamage chain on every hit.
+        // Branch 3: COR_fnc_damage owns ACE state — our hook exits early when COR_SysEnabled.
 
         // Job 1 — Corvus override: runs every tick while Corvus is active.
         //
@@ -379,14 +354,10 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
                 _arges setVariable ["COR_MaxCoolant",    _initMax, true];
                 _arges setVariable ["COR_CoolantVolume", _initMax, true];
                 diag_log format ["[GFL Arges] Corvus override: frameArmor %1→%2, coolant %3", _base, _boosted, _initMax];
-                // Restore HandleDamage: XEH dispatcher (ACE wounds → COR_fnc_damage) + our filter.
-                // Our filter returns 0 on the Corvus path so engine damage stays 0, but ACE still
-                // creates wounds which feed into COR_fnc_damage via ACE_Medical_Injuries → armor depletes.
-                _arges removeAllEventHandlers "HandleDamage";
-                private _xehHD = _arges getVariable ["GFL_XEH_HandleDamage", {}];
-                if (!(_xehHD isEqualTo {})) then { _arges addEventHandler ["HandleDamage", _xehHD]; };
-                _arges addEventHandler ["HandleDamage", (_arges getVariable ["GFL_ArgesDamageFilter", {}])];
-                diag_log "[GFL Arges] Corvus activated: HandleDamage restored (XEH + filter)";
+                // Branch 3: no HandleDamage manipulation needed.
+                // Our filter already returns 0 when COR_SysEnabled (line ~160).
+                // ACE_Medical_Injuries → COR_fnc_damage runs via Corvus's own CfgVehicles config.
+                // Our ACE_Medical_Injuries hook exits early when COR_SysEnabled — no interference.
             };
             // Coolant cap: maintained every tick to beat module absolute-value overwrites
             // Module "Coolant Capacity +" writes 6000/5000 absolute — we keep Arges floor
@@ -459,19 +430,12 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         { [player] remoteExec ["GFL_fnc_argesRevert", 2]; diag_log "[GFL Arges] Revert action used"; }
     ];
 
-    // Capture the CBA XEH HandleDamage dispatcher from config — this is the merged wrapper that
-    // calls ACE medical, Corvus COR_fnc_damage, and any other XEH-registered HandleDamage handlers.
-    // We store it on the unit so the 0.25 s PFH can re-register it when Corvus activates,
-    // restoring bullet-based Corvus armor depletion (ACE wounds → ACE_Medical_Injuries → COR_fnc_damage).
-    private _xehText = getText (configFile >> "CfgVehicles" >> "Man" >> "EventHandlers" >> "HandleDamage");
-    private _xehHD   = if (_xehText != "") then { compile _xehText } else { {} };
-    _arges setVariable ["GFL_XEH_HandleDamage",   _xehHD];
-    _arges setVariable ["GFL_ArgesDamageFilter",  _damageFilter];
-    diag_log format ["[GFL Arges] XEH HandleDamage captured (%1 chars)", count _xehText];
-
-    // Strip ACE's HandleDamage EH so it cannot commit cardiac arrest on the no-Corvus path.
-    // When Corvus activates the XEH dispatcher is restored alongside our filter (see 0.25 s PFH).
-    _arges removeAllEventHandlers "HandleDamage";
+    // Three-branch damage handler:
+    //   Branch 1 (no ACE): _damageFilter manages HP pool, returns 0. No ACE interaction.
+    //   Branch 2 (ACE, no Corvus): ACE_Medical_Injuries hook (fnc_argesInit.sqf) calls
+    //     ace_medical_fnc_fullHeal synchronously inside ACE's chain. No EH manipulation.
+    //   Branch 3 (Corvus active): _damageFilter returns 0 (COR_SysEnabled check). Corvus's
+    //     COR_fnc_damage runs via its own CfgVehicles ACE_Medical_Injuries entry.
     _arges addEventHandler ["HandleDamage", _damageFilter];
 
     // Death redirect — fires synchronously on the client BEFORE A3A's fn_onPlayerRespawn

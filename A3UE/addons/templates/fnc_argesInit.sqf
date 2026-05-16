@@ -48,4 +48,19 @@ if (!hasInterface) exitWith {};
 
 }, 0.5, [false]] call CBA_fnc_addPerFrameHandler;
 
+// Branch 2 (ACE present, Corvus not active): mirror COR_fnc_damage line 5 exactly.
+// ACE_Medical_Injuries fires synchronously inside ACE's HandleDamage chain — before
+// ACE's vitals PFH can trigger cardiac arrest. fullHeal clears all ACE wound state
+// the same way Corvus does. Exits immediately when Corvus is active (Branch 3) so
+// COR_fnc_damage can own ACE state as designed.
+if (isClass (configFile >> "CfgPatches" >> "ace_medical")) then {
+    ["Arges_F", "ACE_Medical_Injuries", {
+        params ["_unit"];
+        if (_unit getVariable ["GFL_ArgesState", "NONE"] != "ARGES") exitWith {};
+        if (_unit getVariable ["COR_SysEnabled", false]) exitWith {};
+        _unit call ace_medical_fnc_fullHeal;
+    }] call CBA_fnc_addClassEventHandler;
+    diag_log "[GFL Arges] ACE_Medical_Injuries hook registered for Arges_F (Branch 2)";
+};
+
 diag_log "[GFL Arges] fnc_argesInit active";
