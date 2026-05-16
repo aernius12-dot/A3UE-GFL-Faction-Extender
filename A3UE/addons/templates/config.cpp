@@ -11,7 +11,6 @@ class CfgPatches
         requiredAddons[] = {
             QDOUBLES(PREFIX,core), "A3A_core", "A3A_ultimate",
             "TacGirls", "GFL_Mangi", "GFL_Paradeus", "SF_Sangvis_Ferri",
-            "CORVUS",
             "cba_main",
             "ace_common"
         };
