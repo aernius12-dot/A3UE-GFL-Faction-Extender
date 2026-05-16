@@ -167,6 +167,16 @@ private _damageFilter = {
     // filter, no hit-location logic. "Headshot immunity" means sniper rounds cost the same
     // 10 HP as a body shot rather than being an instant kill — not that head hits are absorbed.
 
+    // ACE Medical synchronous suppression — no-Corvus path.
+    // ACE creates wounds and checks traumatic cardiac arrest in its own HandleDamage hook,
+    // which fires before ours (ACE registers via XEH at mission start; we register later).
+    // Our 0.25s PFH clears wounds too slowly — cardiac arrest can trigger within the same
+    // burst frame. Clearing here, in the same EH chain as the hit, beats ACE's arrest check.
+    _unit setVariable ["ace_medical_openWounds",  createHashMap];
+    _unit setVariable ["ace_medical_pain",        0];
+    _unit setVariable ["ace_medical_bloodVolume", 6.0];
+    _unit setVariable ["ace_medical_heartRate",   80];
+
     // Drain HP pool
     private _cost = if (_hit >= 100) then { 15 } else { 5 };
     private _hp   = (_unit getVariable ["GFL_ArgesHP", 100]) - _cost;
@@ -369,6 +379,14 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
                 _arges setVariable ["COR_MaxCoolant",    _initMax, true];
                 _arges setVariable ["COR_CoolantVolume", _initMax, true];
                 diag_log format ["[GFL Arges] Corvus override: frameArmor %1→%2, coolant %3", _base, _boosted, _initMax];
+                // Restore HandleDamage: XEH dispatcher (ACE wounds → COR_fnc_damage) + our filter.
+                // Our filter returns 0 on the Corvus path so engine damage stays 0, but ACE still
+                // creates wounds which feed into COR_fnc_damage via ACE_Medical_Injuries → armor depletes.
+                _arges removeAllEventHandlers "HandleDamage";
+                private _xehHD = _arges getVariable ["GFL_XEH_HandleDamage", {}];
+                if (!(_xehHD isEqualTo {})) then { _arges addEventHandler ["HandleDamage", _xehHD]; };
+                _arges addEventHandler ["HandleDamage", (_arges getVariable ["GFL_ArgesDamageFilter", {}])];
+                diag_log "[GFL Arges] Corvus activated: HandleDamage restored (XEH + filter)";
             };
             // Coolant cap: maintained every tick to beat module absolute-value overwrites
             // Module "Coolant Capacity +" writes 6000/5000 absolute — we keep Arges floor
@@ -441,7 +459,19 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         { [player] remoteExec ["GFL_fnc_argesRevert", 2]; diag_log "[GFL Arges] Revert action used"; }
     ];
 
-    // Aegis damage filter — runs on this machine while unit is client-local
+    // Capture the CBA XEH HandleDamage dispatcher from config — this is the merged wrapper that
+    // calls ACE medical, Corvus COR_fnc_damage, and any other XEH-registered HandleDamage handlers.
+    // We store it on the unit so the 0.25 s PFH can re-register it when Corvus activates,
+    // restoring bullet-based Corvus armor depletion (ACE wounds → ACE_Medical_Injuries → COR_fnc_damage).
+    private _xehText = getText (configFile >> "CfgVehicles" >> "Man" >> "EventHandlers" >> "HandleDamage");
+    private _xehHD   = if (_xehText != "") then { compile _xehText } else { {} };
+    _arges setVariable ["GFL_XEH_HandleDamage",   _xehHD];
+    _arges setVariable ["GFL_ArgesDamageFilter",  _damageFilter];
+    diag_log format ["[GFL Arges] XEH HandleDamage captured (%1 chars)", count _xehText];
+
+    // Strip ACE's HandleDamage EH so it cannot commit cardiac arrest on the no-Corvus path.
+    // When Corvus activates the XEH dispatcher is restored alongside our filter (see 0.25 s PFH).
+    _arges removeAllEventHandlers "HandleDamage";
     _arges addEventHandler ["HandleDamage", _damageFilter];
 
     // Death redirect — fires synchronously on the client BEFORE A3A's fn_onPlayerRespawn
