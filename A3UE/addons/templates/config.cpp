@@ -51,12 +51,13 @@ class cfgFunctions {
 };
 
 // Prevent ACE cardiac arrest on Arges_F units (Branch 2: ACE present, Corvus inactive).
-// COR_fnc_damage exits early for Arges when COR_SysEnabled=false; our handler fills the gap.
-// _allDamages resize 0 mirrors Corvus's approach: ACE applies no wounds after all handlers run.
+// Override the base wound handler key so ours runs in its place — avoids non-deterministic
+// config key iteration order. For Arges: fullHeal + resize 0. For all others: delegate to
+// the real ace_medical_damage_fnc_woundsHandlerBase function.
 class ACE_Medical_Injuries {
     class damageTypes {
         class woundHandlers {
-            GFL_Arges_Wounds = "GFL_fnc_argesWoundHandler";
+            ace_medical_damage_woundsHandlerBase = "GFL_fnc_argesWoundHandler";
         };
     };
 };

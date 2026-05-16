@@ -1,14 +1,16 @@
-// ACE wound handler for Arges_F — mirrors COR_fnc_damage's approach exactly.
-// Registered via ACE_Medical_Injuries.damageTypes.woundHandlers in config.cpp.
-// Runs after ace_medical_damage_fnc_woundsHandlerBase; fullHeal clears wounds it
-// created, then _allDamages resize 0 prevents ACE from applying any of them.
-// Skips when Corvus is active — COR_fnc_damage owns ACE state in that case.
+// Replaces ACE's base wound handler key in ACE_Medical_Injuries config.
+// For active non-Corvus Arges_F: clears wounds and blocks creation via resize 0.
+// For all other units: delegates to the real ace_medical_damage_fnc_woundsHandlerBase.
+// This avoids config key iteration order being non-deterministic — we ARE the base handler.
 params ["_unit", "_allDamages", "_typeOfDamage", "_ammo"];
-if (typeOf _unit != "Arges_F")                               exitWith { _this };
-if (!alive _unit)                                            exitWith { _this };
-if (_unit getVariable ["GFL_ArgesState", "NONE"] != "ARGES") exitWith { _this };
-if (_unit getVariable ["COR_SysEnabled", false])             exitWith { _this };
 
-_unit call ace_medical_fnc_fullHeal;
-_allDamages resize 0;
-_this
+if (typeOf _unit == "Arges_F"
+        && alive _unit
+        && {_unit getVariable ["GFL_ArgesState", "NONE"] == "ARGES"}
+        && {!(_unit getVariable ["COR_SysEnabled", false])}) then {
+    _unit call ace_medical_fnc_fullHeal;
+    _allDamages resize 0;
+    _this
+} else {
+    [_unit, _allDamages, _typeOfDamage, _ammo] call ace_medical_damage_fnc_woundsHandlerBase
+};
