@@ -142,6 +142,10 @@ private _damageFilter = {
     // Re-entrancy guard: when we call setDamage 1 ourselves, let it through so Arges actually dies
     if (_unit getVariable ["GFL_ArgesKilling", false])       exitWith { _damage };
 
+    // Dead guard: in-flight bullets can trigger HandleDamage after the unit is killed.
+    // Suppress silently — nothing to protect and fullHeal would error on a dead unit.
+    if (!alive _unit)                                        exitWith { 0 };
+
     // Overall-damage slot (hitPoint == ""): suppress — we manage death via our HP pool
     if (_hitPoint isEqualTo "")                              exitWith { 0 };
 
@@ -309,24 +313,27 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
     _arges setUnitRecoilCoefficient 0.1;
     _arges setCustomAimCoef 0.05;
 
-    // Every 1 s: maintain allowDamage true + AE_Health override + combat buffs.
-    // hitboxinit.sqf fires async on clients and can reset both; PFH beats it each second.
-    // Buffs are maintained here for the no-Corvus path; Corvus's own SysInit PFH maintains
-    // them when Corvus is active (both write the same values, no conflict).
+    // Every 1 s: maintain allowDamage true + EH exclusivity + AE_Health + combat buffs.
+    // ACE re-registers its HandleDamage EH when the player changes (selectPlayer); any such
+    // re-registration would let ACE's setDead path back in. Removing all and re-adding ours
+    // each second closes that window. hitboxinit.sqf can also flip allowDamage false here.
     [{
         params ["_args", "_handle"];
         private _arges = _args select 0;
+        private _filter = _args select 1;
         if (!alive _arges || _arges getVariable ["GFL_ArgesState", "NONE"] != "ARGES") then {
             [_handle] call CBA_fnc_removePerFrameHandler;
         } else {
             _arges allowDamage true;
+            _arges removeAllEventHandlers "HandleDamage";
+            _arges addEventHandler ["HandleDamage", _filter];
             _arges setVariable ["AE_Health", 9999, true];
             _arges enableStamina false;
             _arges setAnimSpeedCoef 1.4;
             _arges setUnitRecoilCoefficient 0.1;
             _arges setCustomAimCoef 0.05;
         };
-    }, 1, [_arges]] call CBA_fnc_addPerFrameHandler;
+    }, 1, [_arges, _damageFilter]] call CBA_fnc_addPerFrameHandler;
 
     // Every 0.25 s: handle Corvus-specific lifecycle.
     // Two jobs: (1) apply stat overrides once when player activates Corvus; (2) detect
