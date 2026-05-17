@@ -40,10 +40,10 @@ _arges setDir _dir;
 _arges setPosATL _pos;
 _arges setName (name _player);
 
-// allowDamage false: engine ignores HandleDamage return values and applies 0 to all
-// native hitpoints. HandleDamage still fires — our HP pool code still runs — but ACE
-// can never accumulate hitpoints to a fatal level regardless of EH ordering.
-_arges allowDamage false;
+// allowDamage true: required for HandleDamage to fire so our HP pool code runs.
+// Our EH is registered after ACE's (post-transform vs ACE's mission-start XEH), so
+// our return value (0) is authoritative — hitpoints cannot accumulate.
+_arges allowDamage true;
 
 // Aegis combat buffs — applied immediately on the server and maintained on the client.
 // These run regardless of whether the player activates Corvus (Corvus's own SysInit PFH
@@ -297,17 +297,16 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
 [{
     params ["_arges", "_damageFilter"];
 
-    // allowDamage false: engine applies 0 to all native hitpoints regardless of any
-    // HandleDamage EH return value (including ACE's). HandleDamage still fires so our
-    // HP pool accounting runs, but ACE can never accumulate hitpoints to fatal levels.
-    _arges allowDamage false;
+    // allowDamage true: HandleDamage must fire for our HP pool to run. TacGirls'
+    // hitboxinit.sqf (async init EH) can flip this back to false — PFH beats it each second.
+    _arges allowDamage true;
     _arges enableStamina false;
     _arges setAnimSpeedCoef 1.4;
     _arges setUnitRecoilCoefficient 0.1;
     _arges setCustomAimCoef 0.05;
 
-    // Every 1 s: maintain allowDamage false + AE_Health override + combat buffs.
-    // Ensures no async init EH from another mod can flip allowDamage back to true.
+    // Every 1 s: maintain allowDamage true + AE_Health override + combat buffs.
+    // hitboxinit.sqf fires async on clients and can reset both; PFH beats it each second.
     // Buffs are maintained here for the no-Corvus path; Corvus's own SysInit PFH maintains
     // them when Corvus is active (both write the same values, no conflict).
     [{
@@ -316,7 +315,7 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         if (!alive _arges || _arges getVariable ["GFL_ArgesState", "NONE"] != "ARGES") then {
             [_handle] call CBA_fnc_removePerFrameHandler;
         } else {
-            _arges allowDamage false;
+            _arges allowDamage true;
             _arges setVariable ["AE_Health", 9999, true];
             _arges enableStamina false;
             _arges setAnimSpeedCoef 1.4;
