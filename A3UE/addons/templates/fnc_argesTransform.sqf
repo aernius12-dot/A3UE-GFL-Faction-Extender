@@ -313,27 +313,48 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
     _arges setUnitRecoilCoefficient 0.1;
     _arges setCustomAimCoef 0.05;
 
-    // Every 1 s: maintain allowDamage true + EH exclusivity + AE_Health + combat buffs.
-    // ACE re-registers its HandleDamage EH when the player changes (selectPlayer); any such
-    // re-registration would let ACE's setDead path back in. Removing all and re-adding ours
-    // each second closes that window. hitboxinit.sqf can also flip allowDamage false here.
+    // Per-frame: maintain allowDamage true + HandleDamage EH every rendering frame.
+    //
+    // allowDamage true: TacGirls' hitboxinit (async init EH) can flip this to false at any
+    //   time; without it our HandleDamage EH never fires and the engine applies raw damage.
+    //
+    // removeAll + re-add: closes the ACE EH re-registration race to one frame (~16 ms).
+    //   ACE re-registers its HandleDamage EH after selectPlayer; if it lands before our next
+    //   tick and a heavy round hits while ACE's EH is last, ACE returns >= 1.0 → engine kill.
+    //   Stripping every frame ensures only our EH is ever last. Our filter returns 0 for both
+    //   non-Corvus (GFL_ArgesHP pool) and Corvus (COR_SysEnabled guard) paths, so the engine
+    //   never applies hitpoint damage in either mode.
+    //
+    // Corvus note: ACE's EH was already removed before Corvus activated (stripped by this PFH
+    //   in every prior frame). Corvus's wound-handler chain runs through the ACE_Medical_Injuries
+    //   config key (not HandleDamage), so it is unaffected by our EH management here.
     [{
         params ["_args", "_handle"];
         private _arges = _args select 0;
         private _filter = _args select 1;
-        if (!alive _arges || _arges getVariable ["GFL_ArgesState", "NONE"] != "ARGES") then {
+        if (!alive _arges || _arges getVariable ["GFL_ArgesState", "NONE"] != "ARGES") exitWith {
             [_handle] call CBA_fnc_removePerFrameHandler;
-        } else {
-            _arges allowDamage true;
-            _arges removeAllEventHandlers "HandleDamage";
-            _arges addEventHandler ["HandleDamage", _filter];
-            _arges setVariable ["AE_Health", 9999, true];
-            _arges enableStamina false;
-            _arges setAnimSpeedCoef 1.4;
-            _arges setUnitRecoilCoefficient 0.1;
-            _arges setCustomAimCoef 0.05;
         };
-    }, 1, [_arges, _damageFilter]] call CBA_fnc_addPerFrameHandler;
+        _arges allowDamage true;
+        _arges removeAllEventHandlers "HandleDamage";
+        _arges addEventHandler ["HandleDamage", _filter];
+    }, 0, [_arges, _damageFilter]] call CBA_fnc_addPerFrameHandler;
+
+    // Every 1 s: maintain AE_Health sentinel + Aegis combat buffs.
+    // AE_Health guards TacGirls' 10-shot kill trigger (hitboxinit.sqf async-resets it to 100;
+    // we keep it at 9999 so the running tally never reaches the kill threshold of 0).
+    [{
+        params ["_args", "_handle"];
+        private _arges = _args select 0;
+        if (!alive _arges || _arges getVariable ["GFL_ArgesState", "NONE"] != "ARGES") exitWith {
+            [_handle] call CBA_fnc_removePerFrameHandler;
+        };
+        _arges setVariable ["AE_Health", 9999, true];
+        _arges enableStamina false;
+        _arges setAnimSpeedCoef 1.4;
+        _arges setUnitRecoilCoefficient 0.1;
+        _arges setCustomAimCoef 0.05;
+    }, 1, [_arges]] call CBA_fnc_addPerFrameHandler;
 
     // Every 0.25 s: handle Corvus-specific lifecycle.
     // Two jobs: (1) apply stat overrides once when player activates Corvus; (2) detect
