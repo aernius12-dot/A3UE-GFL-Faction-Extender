@@ -318,16 +318,19 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
     // allowDamage true: TacGirls' hitboxinit (async init EH) can flip this to false at any
     //   time; without it our HandleDamage EH never fires and the engine applies raw damage.
     //
-    // removeAll + re-add: closes the ACE EH re-registration race to one frame (~16 ms).
-    //   ACE re-registers its HandleDamage EH after selectPlayer; if it lands before our next
-    //   tick and a heavy round hits while ACE's EH is last, ACE returns >= 1.0 → engine kill.
-    //   Stripping every frame ensures only our EH is ever last. Our filter returns 0 for both
-    //   non-Corvus (GFL_ArgesHP pool) and Corvus (COR_SysEnabled guard) paths, so the engine
-    //   never applies hitpoint damage in either mode.
+    // Non-Corvus mode (COR_SysEnabled = false):
+    //   removeAll + re-add every frame. Closes the ACE EH re-registration race to one frame
+    //   (~16 ms). ACE re-registers its HandleDamage EH after selectPlayer; if it lands before
+    //   our next tick and a heavy round hits while ACE's EH is last, ACE returns >= 1.0 →
+    //   engine kill. Stripping every frame ensures only our EH is ever last. Our filter drains
+    //   GFL_ArgesHP pool and returns 0 so the engine never applies hitpoint damage.
     //
-    // Corvus note: ACE's EH was already removed before Corvus activated (stripped by this PFH
-    //   in every prior frame). Corvus's wound-handler chain runs through the ACE_Medical_Injuries
-    //   config key (not HandleDamage), so it is unaffected by our EH management here.
+    // Corvus mode (COR_SysEnabled = true):
+    //   MUST NOT removeAll — Corvus registers its own HandleDamage EH on activation, which
+    //   tracks hits → drains COR_CoolantVolume → triggers COR_Shutdown. Stripping it blinds
+    //   Corvus to incoming fire. Instead: track our EH ID, remove only ours, re-add ours last.
+    //   Corvus's EH runs first (does its internal accounting), our EH runs last and returns 0
+    //   (engine applies no hitpoint damage). Both EHs coexist correctly.
     [{
         params ["_args", "_handle"];
         private _arges = _args select 0;
@@ -336,8 +339,19 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
             [_handle] call CBA_fnc_removePerFrameHandler;
         };
         _arges allowDamage true;
-        _arges removeAllEventHandlers "HandleDamage";
-        _arges addEventHandler ["HandleDamage", _filter];
+        if (_arges getVariable ["COR_SysEnabled", false]) then {
+            // Corvus mode: remove only our EH (by saved ID), re-add ours last.
+            // Corvus's own HandleDamage EH stays intact between frames.
+            private _ourId = _arges getVariable ["GFL_ArgesHdEhId", -1];
+            if (_ourId >= 0) then { _arges removeEventHandler ["HandleDamage", _ourId]; };
+            private _newId = _arges addEventHandler ["HandleDamage", _filter];
+            _arges setVariable ["GFL_ArgesHdEhId", _newId];
+        } else {
+            // Non-Corvus: strip all (ACE, TacGirls, any lingering Corvus EH), add only ours.
+            _arges removeAllEventHandlers "HandleDamage";
+            _arges addEventHandler ["HandleDamage", _filter];
+            _arges setVariable ["GFL_ArgesHdEhId", -1];
+        };
     }, 0, [_arges, _damageFilter]] call CBA_fnc_addPerFrameHandler;
 
     // Every 1 s: maintain AE_Health sentinel + Aegis combat buffs.
