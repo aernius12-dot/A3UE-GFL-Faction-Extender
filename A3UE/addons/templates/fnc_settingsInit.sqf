@@ -4,8 +4,7 @@
     "GFL_petrosHeadSetting",
     "LIST",
     [0, [0, 1], ["Default (Petros)", "Commander Male"]],
-    ["Petros Head", "GFL Antistasi"],
-    "Choose which head model Petros uses. Default is the original Antistasi Petros head. Commander Male uses the GFL T-Doll head.",
+    ["Petros Head", "Select the head model used by Petros"],
     false,
     {}
 ] call CBA_fnc_addSetting;
