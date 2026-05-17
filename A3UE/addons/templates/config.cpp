@@ -50,6 +50,34 @@ class cfgFunctions {
     };
 };
 
+// Arges_F hitpoint armor override: sets every hitpoint's armour value to 1000.
+// ACE normalises HandleDamage _damage as (raw_projectile_energy / hitpoint_armour).
+// With default armour (~2-10), a .50 cal hit normalises to ~1.5-2.0 — instantly lethal.
+// At 1000 the same round normalises to ~0.015, well below the engine's 1.0 kill threshold.
+// Our HandleDamage filter still returns 0 for all non-killing hits; this is belt-and-
+// suspenders for the brief window when ACE's EH is re-registered and runs last.
+class CfgVehicles {
+    class Arges_F {
+        class HitPoints {
+            class HitFace    { armor = 1000; };
+            class HitNeck    { armor = 1000; };
+            class HitHead    { armor = 1000; };
+            class HitPelvis  { armor = 1000; };
+            class HitAbdomen { armor = 1000; };
+            class HitDiaphragm { armor = 1000; };
+            class HitChest   { armor = 1000; };
+            class HitBody    { armor = 1000; };
+            class HitArms    { armor = 1000; };
+            class HitHands   { armor = 1000; };
+            class HitLegs    { armor = 1000; };
+            class HitLeftArm  { armor = 1000; };
+            class HitRightArm { armor = 1000; };
+            class HitLeftLeg  { armor = 1000; };
+            class HitRightLeg { armor = 1000; };
+        };
+    };
+};
+
 // Prevent ACE cardiac arrest on Arges_F units (Branch 2: ACE present, Corvus inactive).
 // Override the base wound handler key so ours runs in its place — avoids non-deterministic
 // config key iteration order. For Arges: fullHeal + resize 0. For all others: delegate to
