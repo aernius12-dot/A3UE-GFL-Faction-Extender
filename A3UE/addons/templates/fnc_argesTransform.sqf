@@ -454,13 +454,19 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
             // and static heating every tick so the kill threshold is never reached.
             _arges setVariable ["COR_Heat",          30, true];
             _arges setVariable ["COR_staticHeating",  1, true];
-            // Diagnostic: log vitals every 0.25 s to confirm stability
-            diag_log format ["[GFL Arges] Corvus vitals: coolant=%1/%2 heat=%3 shutdown=%4 dmg=%5",
+            // Diagnostic: log vitals every 0.25 s. Includes AE_Health, ACE medical state,
+            // and lifeState so we can correlate "Killed" events with non-engine-damage paths
+            // (TacGirls AE_Health setDamage 1, ACE setDead, unconscious-to-dead transitions).
+            diag_log format ["[GFL Arges] Corvus vitals: coolant=%1/%2 heat=%3 shutdown=%4 dmg=%5 AE_H=%6 aceDead=%7 lifeState=%8 alive=%9",
                 _arges getVariable ["COR_CoolantVolume", -1],
                 _arges getVariable ["COR_MaxCoolant",    -1],
                 _arges getVariable ["COR_Heat",          -1],
                 _arges getVariable ["COR_Shutdown",      false],
-                damage _arges
+                damage _arges,
+                _arges getVariable ["AE_Health",         -1],
+                _arges getVariable ["ace_medical_dead",  false],
+                lifeState _arges,
+                alive _arges
             ];
         };
 
@@ -531,12 +537,50 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
     _arges removeAllEventHandlers "HandleDamage";
     _arges addEventHandler ["HandleDamage", _damageFilter];
 
+    // DIAGNOSTIC: Hit EH fires AFTER engine applies damage from a hit. Useful for
+    // confirming what damage actually got applied, separate from the HandleDamage chain.
+    // _damage here is the damage that was applied to the unit (post-chain).
+    _arges addEventHandler ["Hit", {
+        params ["_unit", "_source", "_damage", "_instigator"];
+        diag_log format ["[GFL Diag] Hit EH: src=%1 inst=%2 dmgApplied=%3 unitDmgNow=%4 AE_H=%5 aceDead=%6 lifeState=%7 alive=%8 CORen=%9",
+            _source, _instigator, _damage, damage _unit,
+            _unit getVariable ["AE_Health", -1],
+            _unit getVariable ["ace_medical_dead", false],
+            lifeState _unit,
+            alive _unit,
+            _unit getVariable ["COR_SysEnabled", false]
+        ];
+    }];
+
+    // DIAGNOSTIC: HitPart catches per-fragment hits from explosions and per-bullet hits.
+    // _hitData is an array of hit entries; we log a compact summary per entry.
+    _arges addEventHandler ["HitPart", {
+        params ["_hitData"];
+        {
+            _x params ["_target", "_shooter", "_proj", "_pos", "_vel", "_normal", "_ammoCfg", "_radius", "_partHash"];
+            diag_log format ["[GFL Diag] HitPart: proj=%1 shooter=%2 ammoCfg=%3 partHash=%4 dmgNow=%5 alive=%6",
+                _proj, _shooter, _ammoCfg, _partHash, damage _target, alive _target
+            ];
+        } forEach _hitData;
+    }];
+
     // Death redirect — fires synchronously on the client BEFORE A3A's fn_onPlayerRespawn
     // reads _oldUnit.owner. A3A checks: if (owner != self) → selectPlayer owner; deleteVehicle _newUnit.
     // By setting owner = TDoll here, A3A redirects the respawn to the TDoll and deletes
     // the unwanted Arges_F respawn body automatically.
     _arges addEventHandler ["Killed", {
-        params ["_arges"];
+        params ["_arges", "_killer", "_instigator", "_useEffects"];
+        // DIAGNOSTIC: capture death state BEFORE redirect runs, so we can see what state the
+        // unit was in at the moment of death — pinpoints the kill source.
+        diag_log format ["[GFL Diag] Killed (client) STATE: killer=%1 instigator=%2 useEffects=%3 unitDmg=%4 AE_H=%5 aceDead=%6 lifeState=%7 COR_SD=%8 heat=%9 coolant=%10",
+            _killer, _instigator, _useEffects, damage _arges,
+            _arges getVariable ["AE_Health", -1],
+            _arges getVariable ["ace_medical_dead", false],
+            lifeState _arges,
+            _arges getVariable ["COR_Shutdown", false],
+            _arges getVariable ["COR_Heat", -1],
+            _arges getVariable ["COR_CoolantVolume", -1]
+        ];
         private _identity = _arges getVariable ["GFL_ArgesIdentity", []];
         private _oldBody  = _arges getVariable ["GFL_OldBody",       objNull];
 
@@ -607,7 +651,19 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
 // NO double-death chain — that caused: TDoll re-enabling sim → A3A keepup selectPlayer →
 // TDoll falling from Z=-500 with ArgesFrame equipped → PFH restart → extra onPlayerKilled.
 _arges addEventHandler ["Killed", {
-    params ["_arges"];
+    params ["_arges", "_killer", "_instigator", "_useEffects"];
+    // DIAGNOSTIC: capture death state on server side too. The client EH might miss
+    // events if locality has not transferred (early death). _killer/_instigator pin
+    // down whether the kill was from a unit (combat) or objNull (script setDamage).
+    diag_log format ["[GFL Diag] Killed (server) STATE: killer=%1 instigator=%2 useEffects=%3 unitDmg=%4 AE_H=%5 aceDead=%6 lifeState=%7 COR_SD=%8 heat=%9 alive=%10",
+        _killer, _instigator, _useEffects, damage _arges,
+        _arges getVariable ["AE_Health", -1],
+        _arges getVariable ["ace_medical_dead", false],
+        lifeState _arges,
+        _arges getVariable ["COR_Shutdown", false],
+        _arges getVariable ["COR_Heat", -1],
+        alive _arges
+    ];
     private _identity = _arges getVariable ["GFL_ArgesIdentity", []];
     private _oldBody  = _arges getVariable ["GFL_OldBody",       objNull];
     private _grp      = group _arges;
