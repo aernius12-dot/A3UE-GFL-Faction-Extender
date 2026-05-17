@@ -378,33 +378,38 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         //   No module:          COR_MaxCoolant = 8000
         //   Coolant Capacity +: COR_MaxCoolant = 9000  (8000 + 1000 module delta)
         if (_arges getVariable ["COR_SysEnabled", false]) then {
-            // Armor + coolant: one-shot on first activation
+            // Armor: one-shot on first activation.
+            // IMPORTANT: Do NOT boost COR_FrameArmor — the Corvus fluid-loss system scales
+            // coolant drain proportionally to FrameArmor.  Boosting 500→1700 (×3.4) cuts the
+            // natural ~55 s lifespan down to ~16 s.  Instead we only boost COR_ArmorValues
+            // (per-hitbox incoming-damage reduction), which has no effect on drain rate.
             if (!(_arges getVariable ["GFL_COR_OverrideApplied", false])) then {
                 _arges setVariable ["GFL_COR_OverrideApplied", true];
-                private _base    = _arges getVariable ["COR_FrameArmor", 200];
-                private _boosted = _base + 1200;
-                _arges setVariable ["COR_FrameArmor", _boosted, true];
-                private _arm = _arges getVariable ["COR_ArmorValues", createHashMap];
+                private _base = _arges getVariable ["COR_FrameArmor", 200];
+                private _arm  = _arges getVariable ["COR_ArmorValues", createHashMap];
                 { _arm set [_x, (_arm getOrDefault [_x, _base]) + 1200]; } forEach (keys _arm);
                 _arges setVariable ["COR_ArmorValues", _arm, true];
                 // Fill coolant to Arges base on activation (Corvus default is 5000)
                 private _initMax = if (_arges getVariable ["COR_CoolCap+", false]) then { 9000 } else { 8000 };
                 _arges setVariable ["COR_MaxCoolant",    _initMax, true];
                 _arges setVariable ["COR_CoolantVolume", _initMax, true];
-                diag_log format ["[GFL Arges] Corvus override: frameArmor %1→%2, coolant %3", _base, _boosted, _initMax];
-                // Branch 3: no HandleDamage manipulation needed.
-                // Our filter already returns 0 when COR_SysEnabled (line ~160).
-                // ACE_Medical_Injuries → COR_fnc_damage runs via Corvus's own CfgVehicles config.
-                // Our ACE_Medical_Injuries hook exits early when COR_SysEnabled — no interference.
+                diag_log format ["[GFL Arges] Corvus override: frameArmor unchanged (%1), armorValues +1200, coolant %2", _base, _initMax];
             };
-            // Coolant cap: maintained every tick to beat module absolute-value overwrites
-            // Module "Coolant Capacity +" writes 6000/5000 absolute — we keep Arges floor
+            // Coolant maintenance: every tick.
+            // (1) Keep the cap at Arges floor so module absolute-value writes don't shrink it.
+            // (2) Arges IS the Corvus frame — she has no finite coolant tank.  Drain is blocked
+            //     so Corvus lasts until incoming damage forces COR_Shutdown, not a time limit.
             private _targetMax = if (_arges getVariable ["COR_CoolCap+", false]) then { 9000 } else { 8000 };
-            if ((_arges getVariable ["COR_MaxCoolant", 0]) != _targetMax) then {
-                _arges setVariable ["COR_MaxCoolant", _targetMax, true];
-                private _cv = _arges getVariable ["COR_CoolantVolume", 0];
-                if (_cv > _targetMax) then { _arges setVariable ["COR_CoolantVolume", _targetMax, true]; };
-            };
+            _arges setVariable ["COR_MaxCoolant",    _targetMax, true];
+            _arges setVariable ["COR_CoolantVolume", _targetMax, true];
+            // Diagnostic: log vitals every 0.25 s to confirm stability
+            diag_log format ["[GFL Arges] Corvus vitals: coolant=%1/%2 frameArmor=%3 shutdown=%4 dmg=%5",
+                _arges getVariable ["COR_CoolantVolume", -1],
+                _arges getVariable ["COR_MaxCoolant",    -1],
+                _arges getVariable ["COR_FrameArmor",    -1],
+                _arges getVariable ["COR_Shutdown",      false],
+                damage _arges
+            ];
         };
 
         // Job 2 — shutdown redirect: fn_shutDown.sqf sets COR_Shutdown = true after its
