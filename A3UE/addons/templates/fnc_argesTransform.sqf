@@ -418,11 +418,21 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
             private _targetMax = if (_arges getVariable ["COR_CoolCap+", false]) then { 9000 } else { 8000 };
             _arges setVariable ["COR_MaxCoolant",    _targetMax, true];
             _arges setVariable ["COR_CoolantVolume", _targetMax, true];
+
+            // Heat maintenance: fn_heating.sqf runs every 0.5 s.  When COR_Heat >= 110 it
+            // calls `_unit setDamage 1` directly — bypassing HandleDamage entirely.  This is
+            // what was killing Arges after ~16-44 s (timing varies with module count and FPS).
+            // Root cause: each active Corvus module raises COR_staticHeating; once it exceeds
+            // the cooling coefficient (1.5 at 100% coolant) heat accumulates to the kill point.
+            // Fix: Arges IS the Corvus frame — she dissipates heat intrinsically.  Reset heat
+            // and static heating every tick so the kill threshold is never reached.
+            _arges setVariable ["COR_Heat",          30, true];
+            _arges setVariable ["COR_staticHeating",  1, true];
             // Diagnostic: log vitals every 0.25 s to confirm stability
-            diag_log format ["[GFL Arges] Corvus vitals: coolant=%1/%2 frameArmor=%3 shutdown=%4 dmg=%5",
+            diag_log format ["[GFL Arges] Corvus vitals: coolant=%1/%2 heat=%3 shutdown=%4 dmg=%5",
                 _arges getVariable ["COR_CoolantVolume", -1],
                 _arges getVariable ["COR_MaxCoolant",    -1],
-                _arges getVariable ["COR_FrameArmor",    -1],
+                _arges getVariable ["COR_Heat",          -1],
                 _arges getVariable ["COR_Shutdown",      false],
                 damage _arges
             ];
