@@ -341,6 +341,20 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         _arges allowDamage true;
         _arges removeAllEventHandlers "HandleDamage";
         _arges addEventHandler ["HandleDamage", _filter];
+
+        // Belt-and-suspenders for Corvus mode: ACE re-registers its HandleDamage EH in the
+        // same rendering frame after our removeAll, making ACE last for that hit. Our EH
+        // correctly returns 0, but ACE's return value (non-zero) overrides it.  Reset any
+        // structural damage that slipped through before it can accumulate to the 1.0 kill point.
+        // setDamage does NOT fire HandleDamage (wiki confirmed), so no re-entrancy loop.
+        if (_arges getVariable ["COR_SysEnabled", false]) then {
+            private _slipped = damage _arges;
+            if (_slipped > 0) then {
+                _arges setDamage 0;
+                if (!isNil "ace_medical_fnc_fullHeal") then { _arges call ace_medical_fnc_fullHeal; };
+                diag_log format ["[GFL Arges] Corvus slip-through suppressed: dmg was %1", _slipped];
+            };
+        };
     }, 0, [_arges, _damageFilter]] call CBA_fnc_addPerFrameHandler;
 
     // Every 1 s: maintain AE_Health sentinel + Aegis combat buffs.
