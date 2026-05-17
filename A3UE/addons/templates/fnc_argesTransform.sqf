@@ -313,24 +313,25 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
     _arges setUnitRecoilCoefficient 0.1;
     _arges setCustomAimCoef 0.05;
 
-    // Per-frame: maintain allowDamage true + HandleDamage EH every rendering frame.
+    // Per-frame: maintain allowDamage true + HandleDamage EH management.
     //
     // allowDamage true: TacGirls' hitboxinit (async init EH) can flip this to false at any
-    //   time; without it our HandleDamage EH never fires and the engine applies raw damage.
+    //   time; without it HandleDamage never fires and the engine applies raw damage.
     //
     // Non-Corvus mode (COR_SysEnabled = false):
     //   removeAll + re-add every frame. Closes the ACE EH re-registration race to one frame
     //   (~16 ms). ACE re-registers its HandleDamage EH after selectPlayer; if it lands before
     //   our next tick and a heavy round hits while ACE's EH is last, ACE returns >= 1.0 →
     //   engine kill. Stripping every frame ensures only our EH is ever last. Our filter drains
-    //   GFL_ArgesHP pool and returns 0 so the engine never applies hitpoint damage.
+    //   GFL_ArgesHP pool and returns 0.
     //
     // Corvus mode (COR_SysEnabled = true):
-    //   MUST NOT removeAll — Corvus registers its own HandleDamage EH on activation, which
-    //   tracks hits → drains COR_CoolantVolume → triggers COR_Shutdown. Stripping it blinds
-    //   Corvus to incoming fire. Instead: track our EH ID, remove only ours, re-add ours last.
-    //   Corvus's EH runs first (does its internal accounting), our EH runs last and returns 0
-    //   (engine applies no hitpoint damage). Both EHs coexist correctly.
+    //   Hand off entirely. Corvus registers its own HandleDamage EH via SysInit, and its own
+    //   PFH also re-registers it periodically to stay last. If we compete by also re-adding
+    //   ours every frame, it becomes a race — whichever EH is last at shot-time wins, and
+    //   Corvus's EH returns non-zero damage which accumulates on the unit.
+    //   Fix: remove our EH on the first Corvus-mode frame, then do nothing. Corvus handles
+    //   damage natively, exactly as it does on regular TDolls.
     [{
         params ["_args", "_handle"];
         private _arges = _args select 0;
@@ -340,12 +341,13 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         };
         _arges allowDamage true;
         if (_arges getVariable ["COR_SysEnabled", false]) then {
-            // Corvus mode: remove only our EH (by saved ID), re-add ours last.
-            // Corvus's own HandleDamage EH stays intact between frames.
+            // Corvus mode: remove our EH if still registered, then stand aside.
             private _ourId = _arges getVariable ["GFL_ArgesHdEhId", -1];
-            if (_ourId >= 0) then { _arges removeEventHandler ["HandleDamage", _ourId]; };
-            private _newId = _arges addEventHandler ["HandleDamage", _filter];
-            _arges setVariable ["GFL_ArgesHdEhId", _newId];
+            if (_ourId >= 0) then {
+                _arges removeEventHandler ["HandleDamage", _ourId];
+                _arges setVariable ["GFL_ArgesHdEhId", -1];
+            };
+            // No addEventHandler — Corvus owns the damage pipeline from here.
         } else {
             // Non-Corvus: strip all (ACE, TacGirls, any lingering Corvus EH), add only ours.
             _arges removeAllEventHandlers "HandleDamage";
