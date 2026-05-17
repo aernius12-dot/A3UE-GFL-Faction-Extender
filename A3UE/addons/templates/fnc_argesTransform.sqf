@@ -139,6 +139,19 @@ _arges setVariable ["AE_Health", 9999, true];
 private _damageFilter = {
     params ["_unit", "_selection", "_damage", "_source", "_projectile", "_hitIndex", "_instigator", "_hitPoint"];
 
+    // DIAGNOSTIC: count filter invocations and log Corvus-mode entries.
+    // Removable once chain behaviour is confirmed.
+    if (_unit getVariable ["COR_SysEnabled", false]) then {
+        private _n = (_unit getVariable ["GFL_DiagFilterCalls", 0]) + 1;
+        _unit setVariable ["GFL_DiagFilterCalls", _n];
+        // _damage at entry tells us chain position:
+        //   raw engine value (often >> 1) → we are FIRST in chain
+        //   ≤ 0.9                          → we are AFTER ACE (its damage cap)
+        //   0                              → we are AFTER something that absorbed it
+        diag_log format ["[GFL Diag] HD enter #%1: proj=%2 hp='%3' _damage=%4 curUnitDmg=%5 hitIdx=%6",
+            _n, _projectile, _hitPoint, _damage, damage _unit, _hitIndex];
+    };
+
     // Re-entrancy guard: when we call setDamage 1 ourselves, let it through so Arges actually dies
     if (_unit getVariable ["GFL_ArgesKilling", false])       exitWith { _damage };
 
@@ -349,10 +362,22 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         // setDamage does NOT fire HandleDamage (wiki confirmed), so no re-entrancy loop.
         if (_arges getVariable ["COR_SysEnabled", false]) then {
             private _slipped = damage _arges;
+            // DIAGNOSTIC: how many times did our filter fire since the last reset?
+            // If slip-through occurs with 0 filter calls → our EH was missing during the hit
+            //   (likely stripped between our removeAll and re-add, OR ACE re-registered and
+            //   the engine routed the hit through ACE's now-removed handler index).
+            // If slip-through occurs with N>0 filter calls → our EH fired but did not win
+            //   the chain (or damage came from a setDamage source that bypassed HD entirely).
+            private _filterCalls = _arges getVariable ["GFL_DiagFilterCalls", 0];
+            _arges setVariable ["GFL_DiagFilterCalls", 0];
             if (_slipped > 0) then {
                 _arges setDamage 0;
                 if (!isNil "ace_medical_fnc_fullHeal") then { _arges call ace_medical_fnc_fullHeal; };
-                diag_log format ["[GFL Arges] Corvus slip-through suppressed: dmg was %1", _slipped];
+                diag_log format ["[GFL Arges] Corvus slip-through suppressed: dmg was %1 (filterCalls=%2)", _slipped, _filterCalls];
+            } else {
+                if (_filterCalls > 0) then {
+                    diag_log format ["[GFL Diag] Frame: %1 filter calls, no slip-through", _filterCalls];
+                };
             };
         };
     }, 0, [_arges, _damageFilter]] call CBA_fnc_addPerFrameHandler;
