@@ -233,3 +233,20 @@ addMissionEventHandler ["EntityCreated", {
         diag_log format ["[GFL FaceUniform] SWAPPED unit=%1 face=%2 old=%3 new=%4", _unit, _face, _currentUniform, _targetUniform];
     }, [_unit], 0.5] call CBA_fnc_waitAndExecute;
 }];
+
+// Petros head override — fires after A3A_fnc_initPetros resets face to GreekHead_A3_01.
+// Delay of 1 s ensures initPetros (called synchronously in fn_createPetros) has completed.
+// Handles initial spawn and every respawn since EntityCreated fires each time.
+if (isServer) then {
+    addMissionEventHandler ["EntityCreated", {
+        params ["_unit"];
+        if (!(_unit isKindOf "Man")) exitWith {};
+        [{
+            params ["_unit"];
+            if (!alive _unit || _unit != petros) exitWith {};
+            if (missionNamespace getVariable ["GFL_petrosHeadSetting", 0] != 1) exitWith {};
+            _unit setFace "commandermaleface";
+            diag_log format ["[GFL PetrosHead] Applied commandermaleface to Petros (%1)", _unit];
+        }, [_unit], 1] call CBA_fnc_waitAndExecute;
+    }];
+};

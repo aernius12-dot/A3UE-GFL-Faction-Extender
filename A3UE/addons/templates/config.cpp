@@ -41,6 +41,7 @@ class CfgWeapons {
 class cfgFunctions {
     class GFL {
         class GFL_Templates {
+            PATHTO_FNC(settingsInit);
             PATHTO_FNC(corvusInit);
             PATHTO_FNC(argesInit);
             PATHTO_FNC(argesTransform);
@@ -59,6 +60,12 @@ class ACE_Medical_Injuries {
         class woundHandlers {
             ace_medical_damage_woundsHandlerBase = "GFL_fnc_argesWoundHandler";
         };
+    };
+};
+
+class Extended_PreInit_EventHandlers {
+    class GFL_SettingsInit {
+        init = "call GFL_fnc_settingsInit;";
     };
 };
 
