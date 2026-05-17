@@ -59,17 +59,8 @@ class cfgFunctions {
 class CfgVehicles {
     class Arges_F {
         class HitPoints {
-            class HitFace    { armor = 1000; };
-            class HitNeck    { armor = 1000; };
-            class HitHead    { armor = 1000; };
-            class HitPelvis  { armor = 1000; };
-            class HitAbdomen { armor = 1000; };
-            class HitDiaphragm { armor = 1000; };
-            class HitChest   { armor = 1000; };
-            class HitBody    { armor = 1000; };
-            class HitArms    { armor = 1000; };
-            class HitHands   { armor = 1000; };
-            class HitLegs    { armor = 1000; };
+            class HitHead     { armor = 1000; };
+            class HitBody     { armor = 1000; };
             class HitLeftArm  { armor = 1000; };
             class HitRightArm { armor = 1000; };
             class HitLeftLeg  { armor = 1000; };
