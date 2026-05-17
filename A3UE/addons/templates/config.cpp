@@ -47,6 +47,22 @@ class cfgFunctions {
             PATHTO_FNC(argesTransform);
             PATHTO_FNC(argesRevert);
             PATHTO_FNC(argesWoundHandler);
+            PATHTO_FNC(argesDamageFilter);
+        };
+    };
+};
+
+// XEH HandleDamage on Arges_F class — CBA registers this on every Arges_F unit
+// automatically across createUnit, locality transfer (selectPlayer), respawn, and JIP.
+// ACE Medical's HandleDamage has priority=1; we set priority=-100 so we run LAST in
+// the chain — our return value of 0 is what the engine applies, overriding ACE's cap
+// (which would otherwise return ~1 for severe hits and trigger instant death).
+class Extended_HandleDamage_EventHandlers {
+    class Arges_F {
+        class GFL_Arges_HD {
+            priority = -100;
+            serverOnly = 0;
+            handleDamage = "_this call GFL_fnc_argesDamageFilter";
         };
     };
 };

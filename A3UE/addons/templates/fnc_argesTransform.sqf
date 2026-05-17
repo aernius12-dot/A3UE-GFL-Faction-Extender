@@ -122,181 +122,28 @@ _arges setVariable ["AE_Health", 9999, true];
 ];
 
 // --- Aegis damage filter ---
-// Replicates TacGirls' Aegis hitbox behaviour via HandleDamage (Aegis_Hitbox createVehicle
-// fails for externally-created units — scope=0 abstract class, TacGirls limitation).
-//
-// Thresholds match hitboxinit.sqf (_ammo select 0 == CfgAmmo >> hit):
-//   hit < 8   → immune (light pistol rounds)
-//   hit 8–99  → -10 HP  (rifle/SMG — ~10 shots to kill)
-//   hit ≥ 100 → -25 HP  (HMG, explosives — ~4 hits to kill)
-//   HitHead / HitNeck → absorbed (headshot immunity)
-//
-// Two instances are registered:
-//   • Server-local:  covers the window between createUnit and selectPlayer reaching the client
-//   • Client-local:  covers all combat while the player controls Arges
-// HandleDamage only fires on the machine that has locality, so there is no double-counting.
+// HandleDamage is registered via XEH config (Extended_HandleDamage_EventHandlers on
+// Arges_F) in config.cpp with priority=-100, running AFTER ACE Medical's priority=1.
+// Our return value of 0 is what the engine applies, beating ACE's chain return.
+// XEH handles registration across createUnit, locality transfer (selectPlayer), and JIP —
+// no manual addEventHandler is needed here.
+// The filter body lives in fnc_argesDamageFilter.sqf as GFL_fnc_argesDamageFilter.
 
+// (Inline _damageFilter removed — replaced by GFL_fnc_argesDamageFilter via XEH.)
+// Keep a minimal stub for backwards compatibility with code paths that still reference
+// `_damageFilter` until they're cleaned up. It's never actually invoked because the
+// XEH-registered function does all the work.
 private _damageFilter = {
-    params ["_unit", "_selection", "_damage", "_source", "_projectile", "_hitIndex", "_instigator", "_hitPoint"];
-
-    // DIAGNOSTIC: count filter invocations and log Corvus-mode entries.
-    // Removable once chain behaviour is confirmed.
-    if (_unit getVariable ["COR_SysEnabled", false]) then {
-        private _n = (_unit getVariable ["GFL_DiagFilterCalls", 0]) + 1;
-        _unit setVariable ["GFL_DiagFilterCalls", _n];
-        // _damage at entry tells us chain position:
-        //   raw engine value (often >> 1) → we are FIRST in chain
-        //   ≤ 0.9                          → we are AFTER ACE (its damage cap)
-        //   0                              → we are AFTER something that absorbed it
-        diag_log format ["[GFL Diag] HD enter #%1: proj=%2 hp='%3' _damage=%4 curUnitDmg=%5 hitIdx=%6",
-            _n, _projectile, _hitPoint, _damage, damage _unit, _hitIndex];
-    };
-
-    // Re-entrancy guard: when we call setDamage 1 ourselves, let it through so Arges actually dies
-    if (_unit getVariable ["GFL_ArgesKilling", false])       exitWith { _damage };
-
-    // Dead guard: in-flight bullets can trigger HandleDamage after the unit is killed.
-    // Suppress silently — nothing to protect and fullHeal would error on a dead unit.
-    if (!alive _unit)                                        exitWith { 0 };
-
-    // Overall-damage slot (hitPoint == ""): suppress — we manage death via our HP pool
-    if (_hitPoint isEqualTo "")                              exitWith { 0 };
-
-    // Non-projectile call (environmental, engine internal): absorb silently
-    if (_projectile isEqualTo "")                            exitWith { 0 };
-
-    // Read ammo hit value — same number TacGirls reads from HitPart's _ammo select 0
-    private _hit = getNumber (configFile >> "CfgAmmo" >> _projectile >> "hit");
-
-    // Sub-rifle immunity: pistols, birdshot, anything below rifle threshold
-    if (_hit < 8)                                            exitWith { 0 };
-
-    // Corvus active: player manually activated the system via ACE self-action.
-    // Corvus's ACE hook (COR_fnc_damage) owns armor drain, wound clearing, and death
-    // (COR_Shutdown = true → setUnconscious). Our 0.25 s PFH monitors COR_Shutdown and
-    // fires the redirect. We only suppress engine hitpoints here — Corvus handles the rest.
-    if (_unit getVariable ["COR_SysEnabled", false])         exitWith { 0 };
-
-    // No per-hitpoint (head/body) checks: Arges_F uses a custom TacGirls skeleton whose
-    // visual mesh does not align with the default Arma fire geometry. HitHead could fire
-    // from a chest shot and vice versa, making location-based filtering unreliable noise.
-    // TacGirls' own Aegis_Hitbox uses the same flat approach — one HP pool, pure hit-value
-    // filter, no hit-location logic. "Headshot immunity" means sniper rounds cost the same
-    // 10 HP as a body shot rather than being an instant kill — not that head hits are absorbed.
-
-    // Branch 2 (ACE present, no Corvus): clear ACE wounds inside this HandleDamage callback.
-    // Our EH fires after ACE's (ACE registers at mission start via XEH config; we register
-    // after transform). ACE creates wounds in its EH, then we call fullHeal here in the same
-    // physics tick — before ACE's vitals PFH (scheduled context) can trigger cardiac arrest.
-    // Branch 3 (Corvus active) already returned 0 above; this only runs on the no-Corvus path.
-    if (!isNil "ace_medical_fnc_fullHeal") then { _unit call ace_medical_fnc_fullHeal; };
-
-    // HP cost by hit tier:
-    //   hit  8–29 → 2   rifle/SMG (5.56, 5.45, 7.62x39, 7.62x51, .338…)  750 hits to drain
-    //   hit 30–99 → 5   .50 BMG, HMG, heavy AP                            300 hits to drain
-    //   hit 100–299→ 7  light explosive (grenades, 40mm)                  ~214 hits to drain
-    //   hit 300+  → 15  heavy explosive (RPG, ATGM, bombs, artillery)     100 hits to drain
-    private _cost = switch (true) do {
-        case (_hit < 30):  { 2  };
-        case (_hit < 100): { 5  };
-        case (_hit < 300): { 7  };
-        default            { 15 };
-    };
-    private _hp   = (_unit getVariable ["GFL_ArgesHP", 100]) - _cost;
-    _unit setVariable ["GFL_ArgesHP", _hp max 0, true];
-
-    diag_log format ["[GFL Arges] Hit: proj=%1 hit=%2 cost=%3 HP=%4", _projectile, _hit, _cost, _hp max 0];
-
-    if (_hp <= 0 && !(_unit getVariable ["GFL_ArgesFainting", false])) then {
-        // Burst guard: set before allowDamage so that concurrent HandleDamage callbacks
-        // from the same physics tick (full-auto burst) all see it and skip the faint path.
-        _unit setVariable ["GFL_ArgesFainting", true];
-        // Lock out further engine damage immediately (unscheduled context).
-        _unit allowDamage false;
-
-        private _identity = _unit getVariable ["GFL_ArgesIdentity", []];
-        private _oldBody  = _unit getVariable ["GFL_OldBody",       objNull];
-        private _grp      = group _unit;
-        private _isLeader = (leader _grp == _unit);
-        private _isBoss   = (!isNil "theBoss" && { _unit == theBoss } && { !isNil "A3A_fnc_theBossTransfer" });
-
-        if (isNull _oldBody || _identity isEqualTo []) then {
-            // No stashed body — re-enable damage and kill normally
-            [{
-                params ["_u"];
-                _u setVariable ["GFL_ArgesKilling", true];
-                _u allowDamage true;
-                _u setDamage 1;
-            }, [_unit], 0] call CBA_fnc_waitAndExecute;
-        } else {
-            [{
-                params ["_unit", "_oldBody", "_grp", "_identity", "_isLeader", "_isBoss"];
-
-                // --- Faint: hold Arges alive so no PlayerKilled fires for it ---
-                // ACE: setUnconscious stops ACE's own injury model from pushing towards setDead.
-                // Vanilla: allowDamage false already set — unit frozen at near-death, not dead.
-                if (!isNil "ace_medical_fnc_setUnconscious") then {
-                    [_unit, true] call ace_medical_fnc_setUnconscious;
-                };
-
-                // --- Prepare TDoll identity and loadout ---
-                private _prevOutfit = _identity # 4;
-                private _dl = getUnitLoadout _oldBody;
-                // Strip ArgesFrame from uniform slot — PFH must not see it on respawn
-                _dl set [3, if (_prevOutfit != "") then { [_prevOutfit, []] } else { [] }];
-
-                // Restore A3A identity (global broadcast — works from any machine)
-                _oldBody setVariable ["unitType",       _identity # 0,                               true];
-                _oldBody setVariable ["A3A_playerUID",  _identity # 1,                               true];
-                _oldBody setVariable ["moneyX",         _unit getVariable ["moneyX", _identity # 2], true];
-                _oldBody setVariable ["owner",          _oldBody,                                     true];
-                _oldBody setVariable ["eligible",       _unit getVariable ["eligible", false],        true];
-                _oldBody setVariable ["GFL_ArgesState", "NONE",                                       true];
-
-                // Re-enable TDoll at death position (global commands — cross-machine safe)
-                _oldBody hideObjectGlobal    false;
-                _oldBody enableSimulationGlobal true;
-                _oldBody setPosATL getPosATL _unit;
-                _oldBody setDir    getDir    _unit;
-
-                // --- Hand control to TDoll ---
-                // selectPlayer transfers TDoll locality to this client; all subsequent TDoll
-                // ops (join, setUnitLoadout, setDamage) must run here, not on the server.
-                selectPlayer _oldBody;
-
-                // Clear Arges refs — Killed EH fallback and server EH both exit early on null
-                _unit setVariable ["GFL_OldBody",       objNull, true];
-                _unit setVariable ["GFL_ArgesState",    "NONE",  true];
-                _unit setVariable ["GFL_ArgesIdentity", [],      true];
-
-                // TDoll is now client-local: group, loadout, authority
-                [_oldBody] join _grp;
-                _oldBody setUnitLoadout _dl;
-                if (_isLeader) then { _grp selectLeader _oldBody; };
-                if (_isBoss)   then { [_oldBody, true] remoteExec ["A3A_fnc_theBossTransfer", 2]; };
-
-                // Kill TDoll after 0.5 s → PlayerKilled fires → A3A fn_onPlayerRespawn runs
-                // with typeOf _oldBody = TDoll class → correct respawn + full A3A treatment
-                [{ (_this select 0) setDamage 1; }, [_oldBody], 0.5] call CBA_fnc_waitAndExecute;
-
-                // Silently remove Arges NPC after 3 s — deleteVehicle does not fire Killed EH
-                [{ deleteVehicle (_this select 0); }, [_unit], 3] call CBA_fnc_waitAndExecute;
-
-                diag_log "[GFL Arges] HP=0: faint initiated — TDoll kill 0.5 s, Arges NPC delete 3 s";
-
-            }, [_unit, _oldBody, _grp, _identity, _isLeader, _isBoss], 0] call CBA_fnc_waitAndExecute;
-        };
-    };
-
-    0 // engine applies zero damage — we own the health
+    // No-op stub. Real HD logic lives in GFL_fnc_argesDamageFilter and is wired via XEH.
+    // This stub exists so legacy references to `_damageFilter` (PFH args, remoteExec) keep
+    // compiling without runtime impact.
+    params ["_unit", "_selection", "_damage"];
+    _damage
 };
 
-// Remove all HandleDamage EHs (ACE's, TacGirls', etc.) before adding ours.
-// ACE's EH calls setDead directly inside its EH for hits with normalised damage ≥ 1.0,
-// which fires before our EH runs and cannot be cancelled by fullHeal after the fact.
-// With ACE's EH gone, only our filter processes damage — HP pool + fullHeal + return 0.
-_arges removeAllEventHandlers "HandleDamage";
-_arges addEventHandler ["HandleDamage", _damageFilter];
+// HandleDamage registration removed — XEH (Extended_HandleDamage_EventHandlers in config.cpp)
+// registers GFL_fnc_argesDamageFilter on every Arges_F unit with priority=-100, running
+// AFTER ACE Medical (priority=1) so our return-zero is what the engine applies.
 
 // --- Authority ---
 if (leader _grp == _player) then { _grp selectLeader _arges; };
@@ -326,48 +173,19 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
     _arges setUnitRecoilCoefficient 0.1;
     _arges setCustomAimCoef 0.05;
 
-    // Per-frame: maintain allowDamage true + HandleDamage EH every rendering frame.
-    //
-    // allowDamage true: TacGirls' hitboxinit (async init EH) can flip this to false at any
-    //   time; without it HandleDamage never fires and the engine applies raw damage.
-    //
-    // removeAll + re-add: same logic applies in BOTH Corvus and non-Corvus mode.
-    //   Corvus has NO HandleDamage EH of its own (confirmed via fn_SysInit.sqf source —
-    //   COR_SysInit_EH is a CBA PFH, not a HandleDamage EH). Corvus damage processing runs
-    //   entirely through the ACE wound handler chain (HitPart EH → woundHandlers config →
-    //   COR_fnc_damage via "COR_Damage" key). That path is independent of HandleDamage.
-    //
-    //   Without our HandleDamage EH in Corvus mode the engine receives unfiltered hit values.
-    //   A single heavy round produces hitpoint damage ≥ 1.0 → instant engine kill before any
-    //   wound handler can run. Our filter returns 0 when COR_SysEnabled, so the engine never
-    //   accumulates damage in either mode. COR_fnc_damage still runs via HitPart.
-    //
-    //   ACE re-registers its HandleDamage EH after selectPlayer. Stripping every frame closes
-    //   that race to one rendering frame (~16 ms).
+    // Slip-through monitor (diagnostic + safety net): runs every 0.25 s.
+    // With XEH HandleDamage priority=-100 our return 0 wins the chain — no slip-through
+    // is expected. If `damage _arges > 0` here, something is bypassing HandleDamage
+    // entirely (direct setDamage from another script, engine internal damage path).
+    // Logs and resets so the situation is visible without killing the unit.
     [{
         params ["_args", "_handle"];
         private _arges = _args select 0;
-        private _filter = _args select 1;
         if (!alive _arges || _arges getVariable ["GFL_ArgesState", "NONE"] != "ARGES") exitWith {
             [_handle] call CBA_fnc_removePerFrameHandler;
         };
-        _arges allowDamage true;
-        _arges removeAllEventHandlers "HandleDamage";
-        _arges addEventHandler ["HandleDamage", _filter];
-
-        // Belt-and-suspenders for Corvus mode: ACE re-registers its HandleDamage EH in the
-        // same rendering frame after our removeAll, making ACE last for that hit. Our EH
-        // correctly returns 0, but ACE's return value (non-zero) overrides it.  Reset any
-        // structural damage that slipped through before it can accumulate to the 1.0 kill point.
-        // setDamage does NOT fire HandleDamage (wiki confirmed), so no re-entrancy loop.
         if (_arges getVariable ["COR_SysEnabled", false]) then {
             private _slipped = damage _arges;
-            // DIAGNOSTIC: how many times did our filter fire since the last reset?
-            // If slip-through occurs with 0 filter calls → our EH was missing during the hit
-            //   (likely stripped between our removeAll and re-add, OR ACE re-registered and
-            //   the engine routed the hit through ACE's now-removed handler index).
-            // If slip-through occurs with N>0 filter calls → our EH fired but did not win
-            //   the chain (or damage came from a setDamage source that bypassed HD entirely).
             private _filterCalls = _arges getVariable ["GFL_DiagFilterCalls", 0];
             _arges setVariable ["GFL_DiagFilterCalls", 0];
             if (_slipped > 0) then {
@@ -376,21 +194,24 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
                 diag_log format ["[GFL Arges] Corvus slip-through suppressed: dmg was %1 (filterCalls=%2)", _slipped, _filterCalls];
             } else {
                 if (_filterCalls > 0) then {
-                    diag_log format ["[GFL Diag] Frame: %1 filter calls, no slip-through", _filterCalls];
+                    diag_log format ["[GFL Diag] Tick: %1 filter calls, no slip-through", _filterCalls];
                 };
             };
         };
-    }, 0, [_arges, _damageFilter]] call CBA_fnc_addPerFrameHandler;
+    }, 0.25, [_arges]] call CBA_fnc_addPerFrameHandler;
 
-    // Every 1 s: maintain AE_Health sentinel + Aegis combat buffs.
+    // Every 1 s: maintain AE_Health sentinel + Aegis combat buffs + allowDamage.
     // AE_Health guards TacGirls' 10-shot kill trigger (hitboxinit.sqf async-resets it to 100;
     // we keep it at 9999 so the running tally never reaches the kill threshold of 0).
+    // allowDamage true: TacGirls' hitboxinit async init can flip this to false; without it
+    // HandleDamage never fires and the engine applies raw damage.
     [{
         params ["_args", "_handle"];
         private _arges = _args select 0;
         if (!alive _arges || _arges getVariable ["GFL_ArgesState", "NONE"] != "ARGES") exitWith {
             [_handle] call CBA_fnc_removePerFrameHandler;
         };
+        _arges allowDamage true;
         _arges setVariable ["AE_Health", 9999, true];
         _arges enableStamina false;
         _arges setAnimSpeedCoef 1.4;
@@ -531,11 +352,8 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         { [player] remoteExec ["GFL_fnc_argesRevert", 2]; diag_log "[GFL Arges] Revert action used"; }
     ];
 
-    // Remove all HandleDamage EHs that ACE/TacGirls registered on the client copy of Arges,
-    // then re-add only ours. ACE's EH fires before ours and calls setDead directly inside
-    // its EH for hits with normalised damage ≥ 1.0 — we can never cancel that after the fact.
-    _arges removeAllEventHandlers "HandleDamage";
-    _arges addEventHandler ["HandleDamage", _damageFilter];
+    // HandleDamage is registered via XEH config — no inline removeAll + addEventHandler
+    // needed here. XEH re-attaches the EH on locality transfer (selectPlayer) and JIP.
 
     // DIAGNOSTIC: Hit EH fires AFTER engine applies damage from a hit. Useful for
     // confirming what damage actually got applied, separate from the HandleDamage chain.
