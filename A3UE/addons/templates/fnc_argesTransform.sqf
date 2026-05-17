@@ -274,7 +274,11 @@ private _damageFilter = {
     0 // engine applies zero damage — we own the health
 };
 
-// Server instance: active while Arges is server-local (brief window before selectPlayer)
+// Remove all HandleDamage EHs (ACE's, TacGirls', etc.) before adding ours.
+// ACE's EH calls setDead directly inside its EH for hits with normalised damage ≥ 1.0,
+// which fires before our EH runs and cannot be cancelled by fullHeal after the fact.
+// With ACE's EH gone, only our filter processes damage — HP pool + fullHeal + return 0.
+_arges removeAllEventHandlers "HandleDamage";
 _arges addEventHandler ["HandleDamage", _damageFilter];
 
 // --- Authority ---
@@ -436,12 +440,10 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         { [player] remoteExec ["GFL_fnc_argesRevert", 2]; diag_log "[GFL Arges] Revert action used"; }
     ];
 
-    // Three-branch damage handler:
-    //   Branch 1 (no ACE): _damageFilter manages HP pool, returns 0. No ACE interaction.
-    //   Branch 2 (ACE, no Corvus): fullHeal in _damageFilter (per-hit) + continuous 0.25 s PFH.
-    //     CBA_fnc_addEventHandler for ACE_Medical_Injuries was tried and does not intercept
-    //     ACE's localEvent fires in this ACE version — omitted.
-    //   Branch 3 (Corvus): _damageFilter returns 0 early; COR_fnc_damage owns ACE state.
+    // Remove all HandleDamage EHs that ACE/TacGirls registered on the client copy of Arges,
+    // then re-add only ours. ACE's EH fires before ours and calls setDead directly inside
+    // its EH for hits with normalised damage ≥ 1.0 — we can never cancel that after the fact.
+    _arges removeAllEventHandlers "HandleDamage";
     _arges addEventHandler ["HandleDamage", _damageFilter];
 
     // Death redirect — fires synchronously on the client BEFORE A3A's fn_onPlayerRespawn
