@@ -27,6 +27,9 @@ if (!hasInterface) exitWith {};
     };
 
     if (_unif == "GFL_ArgesFrame" && !_pending) then {
+        if !(missionNamespace getVariable ["GFL_ArgesTransformEnabled", true]) exitWith {
+            diag_log format ["[GFL Arges] ArgesFrame equipped by %1 — transform disabled by setting", name player];
+        };
         _args set [0, true];
         diag_log format ["[GFL Arges] ArgesFrame equipped by %1 — transform in 10 s", name player];
 
@@ -36,6 +39,7 @@ if (!hasInterface) exitWith {};
             if (isNull player || !alive player)                             exitWith { _args set [0, false]; };
             if (uniform player != "GFL_ArgesFrame")                        exitWith { _args set [0, false]; };
             if (player getVariable ["GFL_ArgesState", "NONE"] != "NONE")   exitWith { _args set [0, false]; };
+            if !(missionNamespace getVariable ["GFL_ArgesTransformEnabled", true]) exitWith { _args set [0, false]; };
             diag_log format ["[GFL Arges] Transform triggered for %1", name player];
             [player, player getVariable ["GFL_PrevUniform", ""]] remoteExec ["GFL_fnc_argesTransform", 2];
         }, [_args], 10] call CBA_fnc_waitAndExecute;
