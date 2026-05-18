@@ -356,9 +356,32 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
     // Client-side HD registration — covers all combat once the player controls Arges.
     // Re-register here because locality has transferred from server to client via
     // selectPlayer, and the server-side EH no longer fires (HandleDamage is locality-bound).
-    // No removeAllEventHandlers — appending is fine, ACE's XEH-init EH is at lower index
-    // so we run after it.
-    _arges addEventHandler ["HandleDamage", _damageFilter];
+    //
+    // RPT proved we run FIRST in the chain (raw engine `_damage` values like 4.06 reach
+    // our filter), meaning ACE re-registers AFTER us via its own XEH triggers (locality
+    // transfer, respawn). ACE's return value wins and accumulates hitpoint damage past 1.0.
+    //
+    // Fix: track the index of OUR most-recently-added EH. Every 2 s, remove just that one
+    // (not removeAllEventHandlers — that nukes ACE too and creates an EH-less window) and
+    // re-add at a new higher index. Even if ACE re-registers in between, our EH is now
+    // at the highest index → we run LAST → our return 0 is what the engine applies.
+    private _idx = _arges addEventHandler ["HandleDamage", _damageFilter];
+    _arges setVariable ["GFL_LastHDIdx", _idx];
+
+    [{
+        params ["_args", "_handle"];
+        private _arges  = _args select 0;
+        private _filter = _args select 1;
+        if (!alive _arges || _arges getVariable ["GFL_ArgesState", "NONE"] != "ARGES") exitWith {
+            [_handle] call CBA_fnc_removePerFrameHandler;
+        };
+        private _oldIdx = _arges getVariable ["GFL_LastHDIdx", -1];
+        if (_oldIdx >= 0) then {
+            _arges removeEventHandler ["HandleDamage", _oldIdx];
+        };
+        private _newIdx = _arges addEventHandler ["HandleDamage", _filter];
+        _arges setVariable ["GFL_LastHDIdx", _newIdx];
+    }, 2, [_arges, _damageFilter]] call CBA_fnc_addPerFrameHandler;
 
     // DIAGNOSTIC: Hit EH fires AFTER engine applies damage from a hit. Useful for
     // confirming what damage actually got applied, separate from the HandleDamage chain.
