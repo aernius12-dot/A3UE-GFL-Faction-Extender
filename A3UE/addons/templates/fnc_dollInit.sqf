@@ -47,7 +47,8 @@ GFL_FaceUniformMap = createHashMapFromArray [
     ["sangvisripperface", "sangvisripper_uniform"], ["sangvisvespidface", "sangvisvespid_uniform"]
 ];
 
-GFL_ElmoSupportedFamilies = ["AR", "SMG", "MG", "RF", "HG"];
+// Families we can swap a real weapon for. BLD has no Arma weapon class — face/uniform only.
+GFL_ElmoSupportedFamilies = ["AR", "SMG", "MG", "RF", "SG", "HG"];
 
 private _packForRole = {
     params ["_role"];
@@ -115,7 +116,7 @@ private _profileRows = [
 ];
 
 GFL_ElmoProfileMap = createHashMap;
-GFL_ElmoProfilesByFamily = createHashMapFromArray [["AR", []], ["SMG", []], ["MG", []], ["RF", []], ["HG", []]];
+GFL_ElmoProfilesByFamily = createHashMapFromArray [["AR", []], ["SMG", []], ["MG", []], ["RF", []], ["SG", []], ["HG", []], ["BLD", []]];
 GFL_ElmoFaceKeys = [];
 GFL_ElmoUniforms = [];
 
@@ -125,10 +126,53 @@ GFL_ElmoUniforms = [];
     GFL_ElmoProfileMap set [_key, _profile];
     GFL_ElmoFaceKeys pushBack _key;
     GFL_ElmoUniforms pushBack _uniform;
-    if (_family in GFL_ElmoSupportedFamilies) then {
+    if (_family in (keys GFL_ElmoProfilesByFamily)) then {
         (GFL_ElmoProfilesByFamily get _family) pushBack _profile;
     };
 } forEach _profileRows;
+
+// Antistasi unit class -> ELMO face families allowed for that class. Per user spec:
+// Rifleman/Engineer/etc default to AR-side weapons; Marksman needs RF; Autorifleman needs MG; etc.
+GFL_fnc_getAllowedFamiliesForClass = {
+    params ["_class"];
+    switch (_class) do {
+        case "Rifleman":     { ["AR", "SMG", "SG", "BLD"] };
+        case "Autorifleman": { ["MG"] };
+        case "Marksman":     { ["RF"] };
+        case "Medic":        { ["AR", "SMG", "HG", "BLD"] };
+        case "Engineer":     { ["AR", "SMG", "HG"] };
+        case "AT":           { ["AR", "MG"] };
+        case "AA":           { ["AR", "MG"] };
+        default              { ["AR", "SMG", "RF", "SG"] };
+    };
+};
+
+// Infer the Antistasi unit class from traits + current weapon. Used to decide whether the
+// random face Antistasi assigned is appropriate, and to pick a re-roll pool if it isn't.
+GFL_fnc_getUnitClass = {
+    params ["_unit"];
+    if (_unit getUnitTrait "medic") exitWith { "Medic" };
+    if (_unit getUnitTrait "engineer") exitWith { "Engineer" };
+    if (_unit getUnitTrait "explosiveSpecialist") exitWith { "Engineer" };
+
+    private _primary = primaryWeapon _unit;
+    if (_primary isEqualTo "") exitWith { "Rifleman" };
+
+    private _itemType = [_primary] call BIS_fnc_itemType;
+    private _subType = toLower (_itemType param [1, ""]);
+    if (_subType isEqualTo "machinegun") exitWith { "Autorifleman" };
+    if (_subType isEqualTo "sniperrifle") exitWith { "Marksman" };
+
+    private _secondary = secondaryWeapon _unit;
+    if (_secondary != "") exitWith {
+        private _launchMags = (getUnitLoadout _unit) param [1, []] param [4, []];
+        private _aaMagClass = if (_launchMags isEqualType [] && {count _launchMags > 0}) then { toLower (_launchMags # 0) } else { "" };
+        private _isAA = (_aaMagClass find "_aa" >= 0) || (_aaMagClass find "stinger" >= 0) || (_aaMagClass find "titan_short" >= 0);
+        if (_isAA) then { "AA" } else { "AT" }
+    };
+
+    "Rifleman"
+};
 
 GFL_fnc_weaponSourcePriority = {
     params ["_class"];
@@ -243,26 +287,6 @@ GFL_fnc_isFaceUniformResolved = {
     uniform _unit isEqualTo _targetUniform
 };
 
-GFL_fnc_getUnitRoleFamily = {
-    params ["_unit"];
-    if (_unit getUnitTrait "Medic") exitWith { "HG" };
-
-    private _primary = primaryWeapon _unit;
-    if (_primary isEqualTo "") exitWith { "" };
-
-    private _itemType = [_primary] call BIS_fnc_itemType;
-    _itemType params [["_category", ""], ["_subType", ""]];
-    private _subTypeLower = toLower _subType;
-
-    if (_subTypeLower isEqualTo "machinegun") exitWith { "MG" };
-    if (_subTypeLower isEqualTo "submachinegun") exitWith { "SMG" };
-    if (_subTypeLower isEqualTo "sniperrifle") exitWith { "RF" };
-    if (_subTypeLower isEqualTo "shotgun") exitWith { "SG" };
-    if (_subTypeLower in ["handgun", "pistol"]) exitWith { "HG" };
-    if ((binocular _unit) isEqualTo "Rangefinder") exitWith { "RF" };
-    "AR"
-};
-
 GFL_fnc_unitRequiresUGL = {
     params ["_unit"];
     private _primarySlot = (getUnitLoadout _unit) param [0, []];
@@ -311,50 +335,6 @@ GFL_fnc_selectWeaponForProfile = {
     private _picked = selectRandom _bestEntries;
     _picked set ["score", _bestScore];
     _picked
-};
-
-GFL_fnc_selectElmoProfile = {
-    params ["_unit", "_family", "_requireUGL"];
-
-    private _lockedKey = _unit getVariable ["GFL_ElmoProfileKey", ""];
-    if (_lockedKey != "") then {
-        private _lockedProfile = GFL_ElmoProfileMap getOrDefault [_lockedKey, []];
-        if !(_lockedProfile isEqualTo []) then {
-            _lockedProfile params ["", "", "", "", "_lockedFamily"];
-            if (_lockedFamily isEqualTo _family) then {
-                private _lockedWeapon = [_lockedProfile, _requireUGL] call GFL_fnc_selectWeaponForProfile;
-                if ((_lockedWeapon getOrDefault ["score", -1]) >= 0) exitWith {
-                    [_lockedProfile, _lockedWeapon]
-                };
-            };
-        };
-    };
-
-    private _candidates = +(GFL_ElmoProfilesByFamily getOrDefault [_family, []]);
-    if (_candidates isEqualTo []) exitWith { [] };
-
-    private _currentProfile = GFL_ElmoProfileMap getOrDefault [toLower (face _unit), []];
-    private _bestScore = -1;
-    private _bestPairs = [];
-    {
-        private _weaponEntry = [_x, _requireUGL] call GFL_fnc_selectWeaponForProfile;
-        private _score = _weaponEntry getOrDefault ["score", -1];
-        if (!(_currentProfile isEqualTo []) && {_x isEqualTo _currentProfile}) then {
-            _score = _score + 50;
-        };
-
-        if (_score > _bestScore) then {
-            _bestScore = _score;
-            _bestPairs = [[_x, _weaponEntry]];
-        } else {
-            if (_score isEqualTo _bestScore) then {
-                _bestPairs pushBack [_x, _weaponEntry];
-            };
-        };
-    } forEach _candidates;
-
-    if (_bestPairs isEqualTo []) exitWith { [] };
-    selectRandom _bestPairs
 };
 
 GFL_fnc_swapPrimaryWeapon = {
@@ -448,39 +428,66 @@ GFL_fnc_isElmoUnit = {
     (toLower (face _unit) in GFL_ElmoFaceKeys) || (uniform _unit in GFL_ElmoUniforms)
 };
 
+// Class-first / face-preserving resolution:
+//   1. Detect unit's Antistasi class (Rifleman, Marksman, Medic, etc.).
+//   2. Look up the families that class is allowed to use (per user spec).
+//   3. If the unit's current ELMO face's canonical family is in the allowed list,
+//      keep the face and just match outfit + weapon to it.
+//   4. Otherwise pick a random face from the allowed-family profile pool, and apply
+//      that face + outfit + weapon instead.
+//   5. Either way, assign the FCC backpack matching the picked profile's role last.
 GFL_fnc_tryResolveElmoUnit = {
     params ["_unit"];
     if !([_unit] call GFL_fnc_isElmoUnit) exitWith { false };
 
-    private _family = [_unit] call GFL_fnc_getUnitRoleFamily;
-    if !(_family in GFL_ElmoSupportedFamilies) exitWith {
+    private _class = [_unit] call GFL_fnc_getUnitClass;
+    private _allowed = [_class] call GFL_fnc_getAllowedFamiliesForClass;
+
+    private _currentFaceKey = toLower (face _unit);
+    private _profile = GFL_ElmoProfileMap getOrDefault [_currentFaceKey, []];
+    private _keepFace = !(_profile isEqualTo []) && {(_profile select 4) in _allowed};
+
+    if !(_keepFace) then {
+        // Re-roll: pull all profiles whose canonical family is in the allowed list and pick one.
+        private _pool = [];
+        {
+            _pool append (GFL_ElmoProfilesByFamily getOrDefault [_x, []]);
+        } forEach _allowed;
+        if (_pool isEqualTo []) exitWith {};
+        _profile = selectRandom _pool;
+    };
+
+    if (_profile isEqualTo []) exitWith {
+        // No usable profile (class allowed an empty family pool, e.g. no MG profiles loaded). Fall back.
         [_unit] call GFL_fnc_applyFaceUniformFromCurrentFace;
         true
     };
 
-    private _selection = [_unit, _family, [_unit] call GFL_fnc_unitRequiresUGL] call GFL_fnc_selectElmoProfile;
-    if (_selection isEqualTo []) exitWith {
-        [_unit] call GFL_fnc_applyFaceUniformFromCurrentFace;
-        true
-    };
-
-    _selection params ["_profile", "_weaponEntry"];
-    _profile params ["_profileKey", "_face", "_uniform", "_role", "", "", "_fccPack"];
-    private _weaponClass = _weaponEntry getOrDefault ["class", ""];
-
+    _profile params ["_profileKey", "_face", "_uniform", "_role", "_family", "_hints", "_fccPack"];
     _unit setVariable ["GFL_ElmoProfileKey", _profileKey];
 
     [_unit, _uniform, _face] call GFL_fnc_applyFaceUniform;
-    [_unit, _weaponEntry] call GFL_fnc_swapPrimaryWeapon;
 
+    // Step 4: weapon swap if the doll's canonical family has weapons in the catalog (BLD has none).
+    private _weaponClass = "";
+    if (_family in GFL_ElmoSupportedFamilies) then {
+        private _weaponEntry = [_profile, [_unit] call GFL_fnc_unitRequiresUGL] call GFL_fnc_selectWeaponForProfile;
+        if ((_weaponEntry getOrDefault ["score", -1]) >= 0) then {
+            _weaponClass = _weaponEntry getOrDefault ["class", ""];
+            [_unit, _weaponEntry] call GFL_fnc_swapPrimaryWeapon;
+        };
+    };
+
+    // Step 5: Corvus / FCC backpack last, matching the picked doll's GFL2 role.
     if (isClass (configFile >> "CfgVehicles" >> "TDoll_B_Pack")) then {
         [_unit, _fccPack] call GFL_fnc_assignFccBackpack;
     };
 
-    // Re-apply after weapon/backpack edits so late loadout churn has to fight a stable target.
+    // Re-apply face/uniform after weapon/backpack edits — late loadout churn from other systems
+    // has to fight a stable target.
     [_unit, _uniform, _face] call GFL_fnc_applyFaceUniform;
 
-    diag_log format ["[GFL DollInit] ELMO resolved unit=%1 face=%2 role=%3 family=%4 weapon=%5", _unit, _face, _role, _family, _weaponEntry getOrDefault ["class", ""]];
+    diag_log format ["[GFL DollInit] ELMO resolved unit=%1 class=%2 face=%3 role=%4 family=%5 weapon=%6 kept=%7", _unit, _class, _face, _role, _family, _weaponClass, _keepFace];
     [_unit, _face, _uniform, _weaponClass, _fccPack] call GFL_fnc_isElmoResolved
 };
 
@@ -490,8 +497,8 @@ GFL_fnc_isDollUnitStillResolved = {
     if ([_unit] call GFL_fnc_isElmoUnit) exitWith {
         private _lockedKey = _unit getVariable ["GFL_ElmoProfileKey", ""];
         if (_lockedKey isEqualTo "") exitWith {
-            // ELMO unit but no locked profile — happens for unsupported families (e.g. SG)
-            // that took the face/uniform fallback. Stay resolved as long as face/uniform still match.
+            // ELMO unit but no locked profile — happens for BLD-family fallbacks or when the
+            // allowed-family pool was empty. Stay resolved as long as face/uniform still match.
             [_unit] call GFL_fnc_isFaceUniformResolved
         };
         private _lockedProfile = GFL_ElmoProfileMap getOrDefault [_lockedKey, []];
