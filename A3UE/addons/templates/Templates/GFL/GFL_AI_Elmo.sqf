@@ -23,7 +23,9 @@
 // --- Vanilla CSAT fallbacks (used when sci-fi mod not loaded) ---
 private _vehiclesBasic         = ["O_Quadbike_01_F", "O_MRAP_02_F"];
 private _vehiclesLightUnarmed  = ["O_MRAP_02_F"];
-private _vehiclesLightArmed    = ["O_MRAP_02_hmg_F", "O_MRAP_02_gmg_F"];
+// Roadblock vehicle: CSAT Marshall (wheeled APC) as fallback per user spec ("whatever CSAT
+// APC available"). Bearcat IFV is prepended when Sci-Fi Vehicles Pack is loaded.
+private _vehiclesLightArmed    = ["O_APC_Wheeled_02_rcws_v2_F", "O_MRAP_02_hmg_F"];
 private _vehiclesTrucks        = ["O_Truck_02_transport_F", "O_Truck_02_covered_F"];
 private _vehiclesCargoTrucks   = ["O_Truck_02_box_F"];
 private _vehiclesLightAPCs     = ["O_APC_Wheeled_02_rcws_v2_F"];
@@ -39,7 +41,7 @@ private _vehiclesHelisAttack   = ["O_Heli_Attack_02_F"];                // CSAT 
 private _vehiclesPlanesCAS     = ["O_Plane_CAS_02_F"];
 private _vehiclesPlanesAA      = ["O_Plane_Fighter_02_F"];
 private _vehiclesPlanesTransport = [];
-private _vehiclesMilitiaLightArmed = ["O_MRAP_02_hmg_F"];
+private _vehiclesMilitiaLightArmed = ["O_APC_Wheeled_02_rcws_v2_F", "O_MRAP_02_hmg_F"];
 private _vehiclesMilitiaTrucks = ["O_Truck_02_transport_F"];
 private _vehiclesMilitiaCars   = ["O_MRAP_02_F"];
 private _vehiclesPolice        = ["O_MRAP_02_F"];
