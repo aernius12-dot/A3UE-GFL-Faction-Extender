@@ -234,19 +234,18 @@ addMissionEventHandler ["EntityCreated", {
     }, [_unit], 0.5] call CBA_fnc_waitAndExecute;
 }];
 
-// Petros head override — fires after A3A_fnc_initPetros resets face to GreekHead_A3_01.
-// Delay of 1 s ensures initPetros (called synchronously in fn_createPetros) has completed.
-// Handles initial spawn and every respawn since EntityCreated fires each time.
+// Petros head override — server-side poll every 3 s.
+// Idempotent: only fires setFace when setting is on AND current face differs.
+// Handles initial spawn, respawn, and runtime setting changes without relying on
+// EntityCreated timing (A3A_fnc_createUnit's internal spawn path can vary).
 if (isServer) then {
-    addMissionEventHandler ["EntityCreated", {
-        params ["_unit"];
-        if (!(_unit isKindOf "Man")) exitWith {};
-        [{
-            params ["_unit"];
-            if (!alive _unit || _unit != petros) exitWith {};
-            if (missionNamespace getVariable ["GFL_petrosHeadSetting", 0] != 1) exitWith {};
-            _unit setFace "commandermaleface";
-            diag_log format ["[GFL PetrosHead] Applied commandermaleface to Petros (%1)", _unit];
-        }, [_unit], 1] call CBA_fnc_waitAndExecute;
-    }];
+    diag_log "[GFL PetrosHead] Registering perFrame poll handler (3 s interval)";
+    [{
+        if (isNull petros || !alive petros) exitWith {};
+        if ((missionNamespace getVariable ["GFL_petrosHeadSetting", 0]) != 1) exitWith {};
+        if (face petros isEqualTo "commandermaleface") exitWith {};
+        private _oldFace = face petros;
+        petros setFace "commandermaleface";
+        diag_log format ["[GFL PetrosHead] Swapped petros face: %1 -> commandermaleface (setting=%2)", _oldFace, GFL_petrosHeadSetting];
+    }, 3] call CBA_fnc_addPerFrameHandler;
 };
