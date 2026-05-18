@@ -70,14 +70,14 @@ private _profileRows = [
     ["alvaface", "AlvaFace", "alva_uniform", "Support", "AR", ["an-94", "an94"]],
     ["balthildeface", "BalthildeFace", "balthilde_uniform", "Support", "MG", ["lahti", "m/26", "m26"]],
     ["bastiface", "BastiFace", "basti_uniform", "Support", "HG", ["mark 23", "mk23", "socom"]],
-    ["centaureissiface", "CentaureissiFace", "centaureissi_uniform", "Support", "AR", ["g36"]],
+    ["centaureissiface", "CentaureissiFace", "centaureissi_uniform", "Support", "AR", ["centaureissigun", "g36"]],
     ["cheetaface", "CheetaFace", "cheeta_uniform", "Support", "SMG", ["mp7"]],
     ["cheyanneface", "CheyanneFace", "cheyanne_uniform", "Sentinel", "RF", ["m200", "cheytac"]],
-    ["grozaface", "GrozaFace", "groza_uniform", "Bulwark", "AR", ["ots-14", "ots14", "groza"]],
+    ["grozaface", "GrozaFace", "groza_uniform", "Bulwark", "AR", ["grozagun", "ots-14", "ots14", "groza"]],
     ["harpsyface", "HarpsyFace", "harpsy_uniform", "Vanguard", "SMG", ["steyr smg", "tmp"]],
     ["helenface", "HelenFace", "helen_uniform", "Bulwark", "SG", ["dp-12", "dp12"]],
     ["jiangyuface", "JiangyuFace", "jiangyu_uniform", "Support", "AR", ["type 97", "type97", "qbz-97", "qbz97"]],
-    ["klukaiface", "KlukaiFace", "klukai_uniform", "Sentinel", "AR", ["hk416", "416"]],
+    ["klukaiface", "KlukaiFace", "klukai_uniform", "Sentinel", "AR", ["klukaigun", "hk416", "416"]],
     ["lainiealtface", "LainieAltFace", "lainiealt_uniform", "Sentinel", "SMG", ["ump40", "ump-40"]],
     ["levaface", "LevaFace", "Leva_uniform", "Sentinel", "SMG", ["ump45", "ump-45"]],
     ["lindface", "LindFace", "lind_uniform", "Sentinel", "SG", ["aa-12", "aa12"]],
@@ -102,8 +102,8 @@ private _profileRows = [
     ["tololoface", "TololoFace", "tololo_uniform", "Sentinel", "AR", ["ak-alfa", "akalfa", "ak alfa"]],
     ["ullridface", "UllridFace", "ullrid_uniform", "Vanguard", "BLD", ["pluma edge"]],
     ["ump9face", "UMP9Face", "ump9_uniform", "Support", "SMG", ["ump9", "ump-9"]],
-    ["vectorface", "VectorFace", "vector_uniform", "Support", "SMG", ["vector", "kriss"]],
-    ["vectoraltface", "VectorAltFace", "vectoralt_uniform", "Support", "SMG", ["vector", "kriss"]],
+    ["vectorface", "VectorFace", "vector_uniform", "Support", "SMG", ["vectorgun", "vector", "kriss"]],
+    ["vectoraltface", "VectorAltFace", "vectoralt_uniform", "Support", "SMG", ["vectorgun", "vector", "kriss"]],
     ["voymastinaface", "VoymastinaFace", "voymastina_uniform", "Sentinel", "AR", ["ak-15", "ak15"]],
     ["yooheeface", "YooheeFace", "yoohee_uniform", "Support", "AR", ["k2"]],
     ["zhaohuiface", "ZhaohuiFace", "zhaohui_uniform", "Vanguard", "SMG", ["cs/ls06", "csls06", "ls06"]],
@@ -540,24 +540,23 @@ GFL_fnc_processDollUnit = {
 
 call GFL_fnc_buildWeaponCatalog;
 
+// Per-unit resolution: schedule an initial 1 s check (catches Antistasi's setUnitLoadout
+// after createUnit) AND a 10 s recheck (catches late loadout churn — Antistasi or other
+// scripts overwriting the loadout after the first resolve). processDollUnit is idempotent
+// via GFL_DollInitDone, so the 10 s recheck is cheap when nothing has changed.
 addMissionEventHandler ["EntityCreated", {
     params ["_unit"];
     if (!(_unit isKindOf "Man") || isPlayer _unit) exitWith {};
-    [{ params ["_unit"]; [_unit] call GFL_fnc_processDollUnit; }, [_unit], 1] call CBA_fnc_waitAndExecute;
+    [{ params ["_unit"]; [_unit] call GFL_fnc_processDollUnit; }, [_unit], 1]  call CBA_fnc_waitAndExecute;
+    [{ params ["_unit"]; [_unit] call GFL_fnc_processDollUnit; }, [_unit], 10] call CBA_fnc_waitAndExecute;
 }];
 
-// Safety-net scans: catch units that existed before this script ran or whose EntityCreated
-// fired before locality settled. Two one-shot sweeps replace the previous perpetual 15s PFH —
-// once resolved, units stay resolved via GFL_DollInitDone, so periodic re-checking is wasted.
+// Startup safety-net: 2 s after script load, scan all pre-existing units once (units placed
+// before EntityCreated registered won't have fired the handler). No perpetual PFH — once a
+// unit is resolved (GFL_DollInitDone) it stays resolved, and new spawns are covered by the
+// EntityCreated handler above.
 [{
     {
         [_x] call GFL_fnc_processDollUnit;
     } forEach allUnits;
 }, [], 2] call CBA_fnc_waitAndExecute;
-
-[{
-    {
-        [_x] call GFL_fnc_processDollUnit;
-    } forEach allUnits;
-    diag_log format ["[GFL DollInit] 10s safety-net scan complete (%1 ELMO units resolved total)", GFL_DollResolveCount];
-}, [], 10] call CBA_fnc_waitAndExecute;
