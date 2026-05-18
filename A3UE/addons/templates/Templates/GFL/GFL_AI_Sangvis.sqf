@@ -121,11 +121,11 @@ private _uniforms = [
     "sangvisripper_uniform", "sangvisvespid_uniform"
 ];
 
-private _vests = ["V_PlateCarrier1_blk", "V_TacVestIR_blk", "V_BandollierB_rgr"];
-private _hvests = ["V_PlateCarrierSpec_blk", "V_PlateCarrierGL_rgr"];
-private _helmets = ["H_HelmetB", "H_HelmetB_light"];
-private _slHat = ["H_HelmetSpecB"];
-private _sniHats = ["H_HelmetSpecB"];
+private _vests = ["bc036_invisible_carrier", "bc036_invisible_tacvest", "bc036_invisible_chestrig", "bc036_invisible_combat", "bc036_invisible_defender", "bc036_invisible_protector"];
+private _hvests = ["bc036_invisible_carrier_special", "bc036_invisible_enhanced_combat", "bc036_invisible_special_purpose"];
+private _helmets = ["bc036_invisible_light_combat", "bc036_invisible_special_purpose"];
+private _slHat = ["bc036_invisible_special_purpose", "bc036_invisible_enhanced_combat"];
+private _sniHats = ["bc036_invisible_assassin", "bc036_invisible_stealth_combat"];
 private _backpacks = ["B_AssaultPack_mcamo", "B_FieldPack_ocamo", "B_Carryall_mcamo"];
 private _atBackpacks = ["B_Carryall_mcamo"];
 private _longRangeRadios = ["B_RadioBag_01_mtp_F"];
@@ -268,8 +268,8 @@ _eliteLoadoutData set ["Hvests", _hvests];
 
 private _crewLoadoutData = _militaryLoadoutData call _fnc_copyLoadoutData;
 _crewLoadoutData set ["uniforms", ["U_B_PilotCoveralls"]];
-_crewLoadoutData set ["vests", ["V_TacVest_oli"]];
-_crewLoadoutData set ["helmets", ["H_PilotHelmetHeli_B", "H_CrewHelmetHeli_B"]];
+_crewLoadoutData set ["vests", ["bc036_invisible_crew"]];
+_crewLoadoutData set ["helmets", ["bc036_invisible_crew", "bc036_invisible_deckcrew", "bc036_invisible_heli_crew", "bc036_invisible_heli_pilot", "bc036_invisible_pilot"]];
 
 private _pilotLoadoutData = _crewLoadoutData call _fnc_copyLoadoutData;
 

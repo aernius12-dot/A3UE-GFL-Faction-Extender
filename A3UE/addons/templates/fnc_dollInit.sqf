@@ -236,6 +236,13 @@ GFL_fnc_applyFaceUniformFromCurrentFace = {
     true
 };
 
+GFL_fnc_isFaceUniformResolved = {
+    params ["_unit"];
+    private _targetUniform = GFL_FaceUniformMap getOrDefault [toLower (face _unit), ""];
+    if (_targetUniform isEqualTo "") exitWith { true };
+    uniform _unit isEqualTo _targetUniform
+};
+
 GFL_fnc_getUnitRoleFamily = {
     params ["_unit"];
     if (_unit getUnitTrait "Medic") exitWith { "HG" };
@@ -477,7 +484,21 @@ GFL_fnc_tryResolveElmoUnit = {
 GFL_fnc_processDollUnit = {
     params ["_unit"];
     if (!alive _unit || isPlayer _unit || !local _unit) exitWith {};
-    if (_unit getVariable ["GFL_DollInitDone", false]) exitWith {};
+    if (_unit getVariable ["GFL_DollInitDone", false]) then {
+        if ([_unit] call GFL_fnc_isElmoUnit) then {
+            private _lockedKey = _unit getVariable ["GFL_ElmoProfileKey", ""];
+            if (_lockedKey != "") then {
+                private _lockedProfile = GFL_ElmoProfileMap getOrDefault [_lockedKey, []];
+                if !(_lockedProfile isEqualTo []) then {
+                    _lockedProfile params ["", "_face", "_uniform", "", "", "", "_fccPack"];
+                    if ([_unit, _face, _uniform, primaryWeapon _unit, _fccPack] call GFL_fnc_isElmoResolved) exitWith {};
+                };
+            };
+        } else {
+            if ([_unit] call GFL_fnc_isFaceUniformResolved) exitWith {};
+        };
+        _unit setVariable ["GFL_DollInitDone", false];
+    };
 
     if ([_unit] call GFL_fnc_isElmoUnit) exitWith {
         if ([_unit] call GFL_fnc_tryResolveElmoUnit) then {

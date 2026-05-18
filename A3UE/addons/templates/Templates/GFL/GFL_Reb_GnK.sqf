@@ -212,7 +212,7 @@ private _faces = [
 //////////////////////////
 
 private _loadoutData = call _fnc_createLoadoutData;
-private _vests = ["V_PlateCarrier1_rgr", "V_BandollierB_rgr", "V_TacVest_oli"];
+private _vests = ["bc036_invisible_carrier", "bc036_invisible_tacvest", "bc036_invisible_chestrig", "bc036_invisible_combat", "bc036_invisible_defender", "bc036_invisible_protector"];
 
 _loadoutData set ["maps", ["ItemMap"]];
 _loadoutData set ["watches", ["ItemWatch"]];
@@ -223,7 +223,7 @@ _loadoutData set ["binoculars", ["Binocular"]];
 _loadoutData set ["uniforms", _rebUniforms];
 _loadoutData set ["vests", _vests];
 _loadoutData set ["petrosUniforms", ["commandermale_uniform"]];
-_loadoutData set ["petrosVests", ["V_Rangemaster_belt", "V_PlateCarrier1_rgr"]];
+_loadoutData set ["petrosVests", ["bc036_invisible_carrier_special", "bc036_invisible_special_purpose"]];
 _loadoutData set ["slUniforms", ["qiongjiu_uniform", "littara_uniform", "jiangyu_uniform"]];
 
 // FCC backpacks — all five frame types available to every GnK soldier
@@ -232,9 +232,9 @@ if (isClass (configFile >> "cfgVehicles" >> "TDoll_B_Pack")) then {
 };
 
 _loadoutData set ["headgear", []];
-_loadoutData set ["helmets", ["H_HelmetB", "H_HelmetB_light"]];
-_loadoutData set ["slHat",   ["H_HelmetSpecB"]];
-_loadoutData set ["sniHats", ["H_HelmetSpecB"]];
+_loadoutData set ["helmets", ["bc036_invisible_light_combat", "bc036_invisible_special_purpose"]];
+_loadoutData set ["slHat",   ["bc036_invisible_special_purpose", "bc036_invisible_enhanced_combat"]];
+_loadoutData set ["sniHats", ["bc036_invisible_assassin", "bc036_invisible_stealth_combat"]];
 _loadoutData set ["glasses", []];
 _loadoutData set ["goggles", []];
 _loadoutData set ["facemask", []];
