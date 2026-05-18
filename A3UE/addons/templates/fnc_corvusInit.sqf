@@ -166,87 +166,53 @@ addMissionEventHandler ["EntityCreated", {
     } forEach allUnits;
 }, 10, [_fccPacks]] call CBA_fnc_addPerFrameHandler;
 
-// Face-uniform matcher: fires once per unit on spawn rather than polling allUnits.
-// EntityCreated fires when createUnit is called; identity (face) arrives one frame
-// later via remoteExec, so we defer 0.5 s to let setIdentityLocal land.
-// Disable per-mission via server debug console: GFL_FaceUniformEnabled = false
-GFL_FaceUniformMap = createHashMapFromArray [
-    // tacgirls_elmo (27)
-    ["alvaface",            "alva_uniform"],         ["balthildeface",       "balthilde_uniform"],
-    ["bastiface",           "basti_uniform"],         ["centaureissiface",    "centaureissi_uniform"],
-    ["cheetaface",          "cheeta_uniform"],        ["cheyanneface",        "cheyanne_uniform"],
-    ["commanderfemaleface", "commanderfemale_uniform"],["commandermaleface",  "commandermale_uniform"],
-    ["grozaface",           "groza_uniform"],         ["harpsyface",          "harpsy_uniform"],
-    ["helenface",           "helen_uniform"],         ["jiangyuface",         "jiangyu_uniform"],
-    ["klukaiface",          "klukai_uniform"],        ["lainiealtface",       "lainiealt_uniform"],
-    ["Levaface",            "Leva_uniform"],          ["lindface",            "lind_uniform"],
-    ["littaraface",         "littara_uniform"],       ["liushihface",         "liushih_uniform"],
-    ["lottaface",           "lotta_uniform"],         ["makiattoface",        "makiatto_uniform"],
-    ["mechtyface",          "mechty_uniform"],        ["mitylface",           "mityl_uniform"],
-    ["mosinface",           "mosin_uniform"],         ["nagantface",          "nagant_uniform"],
-    ["papashaface",         "papasha_uniform"],       ["qiongjiuface",        "qiongjiu_uniform"],
-    ["robellaface",         "robella_uniform"],
-    // tacgirls_elmo_beta (15)
-    ["sakuraface",          "sakura_uniform"],        ["sextansmaidface",     "sextansmaid_uniform"],
-    ["sharkryface",         "sharkry_uniform"],       ["simulacrum_oface",    "simulacrum_o_uniform"],
-    ["soppoface",           "soppo_uniform"],         ["springfieldface",     "springfield_uniform"],
-    ["suomiface",           "suomi_uniform"],         ["tololoface",          "tololo_uniform"],
-    ["ullridface",          "ullrid_uniform"],        ["ump9face",            "ump9_uniform"],
-    ["vectorface",          "vector_uniform"],        ["vectoraltface",       "vectoralt_uniform"],
-    ["voymastinaface",      "voymastina_uniform"],    ["yooheeface",          "yoohee_uniform"],
-    ["zhaohuiface",         "zhaohui_uniform"],
-    // tacgirls_elmo_century (14 faces → 12 uniforms; aglteama/b share base)
-    ["aglteamface",         "aglteam_uniform"],       ["aglteamaface",        "aglteam_uniform"],
-    ["aglteambface",        "aglteam_uniform"],       ["andorisface",         "andoris_uniform"],
-    ["colphneface",         "colphne_uniform"],       ["dushevnayaface",      "dushevnaya_uniform"],
-    ["fayeface",            "faye_uniform"],          ["kseniaface",          "ksenia_uniform"],
-    ["nemesisface",         "nemesis_uniform"],       ["nikketaface",         "nikketa_uniform"],
-    ["periface",            "peri_uniform"],          ["perityaface",         "peritya_uniform"],
-    ["phaetusaface",        "phaetusa_uniform"],      ["sabrinaface",         "sabrina_uniform"],
-    // Sangvis Ferri (4)
-    ["sangvisguardface",    "sangvisguard_uniform"],  ["sangvisjaegerface",   "sangvisjaeger_uniform"],
-    ["sangvisripperface",   "sangvisripper_uniform"], ["sangvisvespidface",   "sangvisvespid_uniform"]
-];
-
-addMissionEventHandler ["EntityCreated", {
-    params ["_unit"];
-    if (!(_unit isKindOf "Man")) exitWith {};
-    if (!(missionNamespace getVariable ["GFL_FaceUniformEnabled", true])) exitWith {};
-    [{
-        params ["_unit"];
-        if (isPlayer _unit || !alive _unit) exitWith {};
-        if (_unit getVariable ["GFL_FaceUniformDone", false]) exitWith {};
-        _unit setVariable ["GFL_FaceUniformDone", true];
-        private _face = face _unit;
-        private _currentUniform = uniform _unit;
-        private _targetUniform = GFL_FaceUniformMap getOrDefault [_face, ""];
-        if (_targetUniform isEqualTo "") exitWith {};
-        diag_log format ["[GFL FaceUniform] unit=%1 face=%2 current=%3 target=%4", _unit, _face, _currentUniform, _targetUniform];
-        if (_currentUniform isEqualTo _targetUniform) exitWith {
-            diag_log format ["[GFL FaceUniform] MATCH (no swap needed) unit=%1 face=%2 uniform=%3", _unit, _face, _currentUniform];
-        };
-        private _loadout = getUnitLoadout _unit;
-        private _oldSlot = _loadout # 3;
-        private _items = if (count _oldSlot > 1) then { _oldSlot # 1 } else { [] };
-        _loadout set [3, [_targetUniform, _items]];
-        _unit setUnitLoadout _loadout;
-        diag_log format ["[GFL FaceUniform] SWAPPED unit=%1 face=%2 old=%3 new=%4", _unit, _face, _currentUniform, _targetUniform];
-    }, [_unit], 0.5] call CBA_fnc_waitAndExecute;
-}];
-
-// Petros head override — fires after A3A_fnc_initPetros resets face to GreekHead_A3_01.
-// Delay of 1 s ensures initPetros (called synchronously in fn_createPetros) has completed.
-// Handles initial spawn and every respawn since EntityCreated fires each time.
+// Petros identity override (head + name) — server-side 3 s poll.
+// Idempotent via per-unit signature variable so we only call setIdentity when the
+// applied combo changes. Variable resets automatically on respawn since the new
+// petros object starts with no variables set.
 if (isServer) then {
-    addMissionEventHandler ["EntityCreated", {
-        params ["_unit"];
-        if (!(_unit isKindOf "Man")) exitWith {};
-        [{
-            params ["_unit"];
-            if (!alive _unit || _unit != petros) exitWith {};
-            if (missionNamespace getVariable ["GFL_petrosHeadSetting", 0] != 1) exitWith {};
-            _unit setFace "commandermaleface";
-            diag_log format ["[GFL PetrosHead] Applied commandermaleface to Petros (%1)", _unit];
-        }, [_unit], 1] call CBA_fnc_waitAndExecute;
-    }];
+    diag_log "[GFL PetrosIdentity] Registering perFrame poll handler (3 s interval)";
+
+    // [firstName, lastName] pairs, indexed by GFL_petrosNameSetting
+    GFL_petrosNameOptions = [
+        ["Petros", ":)"],
+        ["John", "Frontline"],
+        ["Commander", ""],
+        ["Shikikan", ""]
+    ];
+
+    [{
+        if (isNull petros || !alive petros) exitWith {};
+
+        private _headSetting = missionNamespace getVariable ["GFL_petrosHeadSetting", 0];
+        private _nameSetting = missionNamespace getVariable ["GFL_petrosNameSetting", 0];
+        private _signature = format ["h%1_n%2", _headSetting, _nameSetting];
+
+        if ((petros getVariable ["GFL_appliedIdentity", ""]) isEqualTo _signature) exitWith {};
+
+        // Head: default "GreekHead_A3_01" (what initPetros applies), or commandermaleface
+        private _desiredFace = if (_headSetting isEqualTo 1) then { "commandermaleface" } else { "GreekHead_A3_01" };
+
+        // Name: clamp index into options
+        private _idx = (_nameSetting max 0) min ((count GFL_petrosNameOptions) - 1);
+        (GFL_petrosNameOptions select _idx) params ["_firstName", "_lastName"];
+
+        // Use Antistasi's identity setter (same pattern as fn_initPetros) so the
+        // face + name pair are applied together and MP-synced consistently.
+        private _identity = createHashMapFromArray [
+            ["face", _desiredFace],
+            ["speaker", "Male01GRE"],
+            ["pitch", 1.1],
+            ["firstName", _firstName],
+            ["lastName", _lastName]
+        ];
+        [petros, _identity] call A3A_fnc_setIdentity;
+
+        // Update group label so the HUD / map shows the chosen name too
+        group petros setGroupIdGlobal [_firstName, "GroupColor4"];
+
+        petros setVariable ["GFL_appliedIdentity", _signature, true];
+
+        diag_log format ["[GFL PetrosIdentity] Applied face=%1 firstName=%2 lastName=%3 (h=%4 n=%5)", _desiredFace, _firstName, _lastName, _headSetting, _nameSetting];
+    }, 3] call CBA_fnc_addPerFrameHandler;
 };

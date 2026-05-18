@@ -42,6 +42,7 @@ class cfgFunctions {
     class GFL {
         class GFL_Templates {
             PATHTO_FNC(settingsInit);
+            PATHTO_FNC(dollInit);
             PATHTO_FNC(corvusInit);
             PATHTO_FNC(argesInit);
             PATHTO_FNC(argesTransform);
@@ -71,13 +72,16 @@ class ACE_Medical_Injuries {
 
 class Extended_PreInit_EventHandlers {
     class GFL_SettingsInit {
-        init = "call GFL_fnc_settingsInit;";
+        init = "call compile preprocessFileLineNumbers '\x\A3UE\addons\templates\fnc_settingsInit.sqf';";
     };
 };
 
 // Activate CORVUS on GnK AI units at mission start (server-side only).
 // Arges monitor runs on all clients with interface (hasInterface guard inside).
 class Extended_PostInit_EventHandlers {
+    class GFL_DollActivation {
+        init = "call GFL_fnc_dollInit;";
+    };
     class GFL_CORVUSActivation {
         init = "call GFL_fnc_corvusInit;";
     };

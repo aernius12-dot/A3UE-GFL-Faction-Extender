@@ -1,10 +1,17 @@
 // GFL - Varjagers (Occupant or Invader / AI faction)
 
 ["name", "GFL - Varjagers"] call _fnc_saveToTemplate;
+["spawnMarkerName", format [localize "STR_supportcorridor", "Varjagers"]] call _fnc_saveToTemplate;
+["flag", "Flag_CSAT_F"] call _fnc_saveToTemplate;
+["flagTexture", "\A3\Data_F\Flags\Flag_CSAT_CO.paa"] call _fnc_saveToTemplate;
+["flagMarkerType", "flag_CSAT"] call _fnc_saveToTemplate;
 
 ["ammobox", "Box_CSAT_AmmoOrd_F"] call _fnc_saveToTemplate;
 ["surrenderCrate", "Box_CSAT_Wps_F"] call _fnc_saveToTemplate;
 ["equipmentBox", "Box_CSAT_Equip_F"] call _fnc_saveToTemplate;
+["smallBunker", ""] call _fnc_saveToTemplate;
+["sandbag", ""] call _fnc_saveToTemplate;
+["sandbagRound", ""] call _fnc_saveToTemplate;
 
 //////////////////////////
 //       Vehicles       //
@@ -41,12 +48,18 @@ private _vehiclesAirPatrol = ["O_Heli_Light_02_unarmed_F"];
 ["vehiclesLightArmed", _vehiclesLightArmed] call _fnc_saveToTemplate;
 ["vehiclesTrucks", _vehiclesTrucks] call _fnc_saveToTemplate;
 ["vehiclesCargoTrucks", _vehiclesCargoTrucks] call _fnc_saveToTemplate;
+["vehiclesAmmoTrucks", ["O_Truck_02_ammo_F"]] call _fnc_saveToTemplate;
+["vehiclesRepairTrucks", ["O_Truck_02_box_F"]] call _fnc_saveToTemplate;
+["vehiclesFuelTrucks", ["O_Truck_02_fuel_F"]] call _fnc_saveToTemplate;
+["vehiclesMedical", ["O_Truck_02_medical_F"]] call _fnc_saveToTemplate;
 ["vehiclesLightAPCs", _vehiclesLightAPCs] call _fnc_saveToTemplate;
 ["vehiclesAPCs", _vehiclesAPCs] call _fnc_saveToTemplate;
 ["vehiclesIFVs", _vehiclesIFVs] call _fnc_saveToTemplate;
 ["vehiclesTanks", _vehiclesTanks] call _fnc_saveToTemplate;
 ["vehiclesLightTanks", _vehiclesLightTanks] call _fnc_saveToTemplate;
 ["vehiclesAA", _vehiclesAA] call _fnc_saveToTemplate;
+["vehiclesTransportBoats", []] call _fnc_saveToTemplate;
+["vehiclesGunBoats", []] call _fnc_saveToTemplate;
 ["vehiclesHelisLight", _vehiclesHelisLight] call _fnc_saveToTemplate;
 ["vehiclesHelisTransport", _vehiclesHelisTransport] call _fnc_saveToTemplate;
 ["vehiclesHelisLightAttack", _vehiclesHelisLightAttack] call _fnc_saveToTemplate;
@@ -54,9 +67,14 @@ private _vehiclesAirPatrol = ["O_Heli_Light_02_unarmed_F"];
 ["vehiclesPlanesCAS", _vehiclesPlanesCAS] call _fnc_saveToTemplate;
 ["vehiclesPlanesAA", _vehiclesPlanesAA] call _fnc_saveToTemplate;
 ["vehiclesPlanesTransport", _vehiclesPlanesTransport] call _fnc_saveToTemplate;
+["vehiclesArtillery", []] call _fnc_saveToTemplate;
+["magazines", createHashMapFromArray []] call _fnc_saveToTemplate;
+["uavsAttack", []] call _fnc_saveToTemplate;
+["uavsPortable", []] call _fnc_saveToTemplate;
 ["vehiclesMilitiaLightArmed", _vehiclesMilitiaLightArmed] call _fnc_saveToTemplate;
 ["vehiclesMilitiaTrucks", _vehiclesMilitiaTrucks] call _fnc_saveToTemplate;
 ["vehiclesMilitiaCars", _vehiclesMilitiaCars] call _fnc_saveToTemplate;
+["vehiclesMilitiaAPCs", []] call _fnc_saveToTemplate;
 ["vehiclesPolice", _vehiclesPolice] call _fnc_saveToTemplate;
 ["vehiclesAirPatrol", _vehiclesAirPatrol] call _fnc_saveToTemplate;
 
@@ -64,8 +82,13 @@ private _vehiclesAirPatrol = ["O_Heli_Light_02_unarmed_F"];
 ["staticAT", ["O_static_AT_F"]] call _fnc_saveToTemplate;
 ["staticAA", ["O_static_AA_F"]] call _fnc_saveToTemplate;
 ["staticMortars", ["O_Mortar_01_F"]] call _fnc_saveToTemplate;
+["staticHowitzers", []] call _fnc_saveToTemplate;
+["vehicleRadar", ""] call _fnc_saveToTemplate;
+["vehicleSam", ""] call _fnc_saveToTemplate;
+["howitzerMagazineHE", ""] call _fnc_saveToTemplate;
 ["mortarMagazineHE", "3Rnd_82mm_Mo_shells"] call _fnc_saveToTemplate;
 ["mortarMagazineSmoke", "3Rnd_82mm_Mo_Smoke_white"] call _fnc_saveToTemplate;
+["mortarMagazineFlare", ""] call _fnc_saveToTemplate;
 
 ["minefieldAT", ["ATMine"]] call _fnc_saveToTemplate;
 ["minefieldAPERS", ["APERSMine", "APERSBoundingMine"]] call _fnc_saveToTemplate;
@@ -95,11 +118,11 @@ private _uniforms = [
     "felade_uniform", "felamedisin_uniform", "urokrake_uniform"
 ];
 
-private _vests = ["V_PlateCarrier2_rgr", "V_TacVestIR_blk", "V_BandollierB_cbr"];
-private _hvests = ["V_PlateCarrierSpec_blk", "V_PlateCarrierSpec_rgr"];
-private _helmets = ["H_HelmetB", "H_HelmetB_light"];
-private _slHat = ["H_HelmetSpecB"];
-private _sniHats = ["H_HelmetSpecB"];
+private _vests = ["bc036_invisible_carrier", "bc036_invisible_tacvest", "bc036_invisible_chestrig", "bc036_invisible_combat", "bc036_invisible_defender", "bc036_invisible_protector"];
+private _hvests = ["bc036_invisible_carrier_special", "bc036_invisible_enhanced_combat", "bc036_invisible_special_purpose"];
+private _helmets = ["bc036_invisible_light_combat", "bc036_invisible_special_purpose"];
+private _slHat = ["bc036_invisible_special_purpose", "bc036_invisible_enhanced_combat"];
+private _sniHats = ["bc036_invisible_assassin", "bc036_invisible_stealth_combat"];
 private _backpacks = ["B_AssaultPack_cbr", "B_FieldPack_cbr", "B_Carryall_cbr"];
 private _atBackpacks = ["B_Carryall_cbr"];
 private _longRangeRadios = ["B_RadioBag_01_mtp_F"];
@@ -246,8 +269,8 @@ _eliteLoadoutData set ["Hvests", _hvests];
 
 private _crewLoadoutData = _militaryLoadoutData call _fnc_copyLoadoutData;
 _crewLoadoutData set ["uniforms", ["U_O_PilotCoveralls"]];
-_crewLoadoutData set ["vests", ["V_TacVestIR_blk"]];
-_crewLoadoutData set ["helmets", ["H_PilotHelmetHeli_B", "H_CrewHelmetHeli_B"]];
+_crewLoadoutData set ["vests", ["bc036_invisible_crew"]];
+_crewLoadoutData set ["helmets", ["bc036_invisible_crew", "bc036_invisible_deckcrew", "bc036_invisible_heli_crew", "bc036_invisible_heli_pilot", "bc036_invisible_pilot"]];
 
 private _pilotLoadoutData = _crewLoadoutData call _fnc_copyLoadoutData;
 
