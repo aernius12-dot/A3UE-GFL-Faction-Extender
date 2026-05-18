@@ -16,42 +16,69 @@
 //////////////////////////
 //       Vehicles       //
 //////////////////////////
-// Elmo uses standard BLUFOR (NATO) vehicles as their military transport.
-// TacGirls does not add vehicles, so vanilla BLUFOR vehicles are used.
+// Vehicle flow per user spec: Sci-Fi Vehicles Pack (TKE_Ext_*) preferred, fall back to
+// vanilla CSAT (arid where available), optionally RHS Russian for the troop transport
+// helicopter. Each block tests for the class so a missing mod degrades gracefully.
 
-private _vehiclesBasic = ["B_Quadbike_01_F", "B_MRAP_01_F"];
-private _vehiclesLightUnarmed = ["B_MRAP_01_F"];
-private _vehiclesLightArmed = ["B_MRAP_01_hmg_F", "B_MRAP_01_gmg_F"];
-private _vehiclesTrucks = ["B_Truck_01_transport_F", "B_Truck_01_covered_F"];
-private _vehiclesCargoTrucks = ["B_Truck_01_box_F"];
-private _vehiclesLightAPCs = ["B_APC_Wheeled_01_cannon_F"];
-private _vehiclesAPCs = ["B_APC_Tracked_01_rcws_F"];
-private _vehiclesIFVs = ["B_APC_Tracked_01_AA_F"];
-private _vehiclesTanks = ["B_MBT_01_cannon_F"];
-private _vehiclesLightTanks = ["B_AFV_wheeled_01_cannon_F"];
-private _vehiclesAA = ["B_APC_Tracked_01_AA_F"];
-private _vehiclesHelisLight = ["B_Heli_Light_01_F"];
-private _vehiclesHelisTransport = ["B_Heli_Transport_03_F", "B_Heli_Transport_01_F"];
-private _vehiclesHelisLightAttack = ["B_Heli_Light_01_armed_F"];
-private _vehiclesHelisAttack = ["B_Heli_Attack_01_F"];
-private _vehiclesPlanesCAS = ["B_Plane_CAS_01_F"];
-private _vehiclesPlanesAA = ["B_Plane_Fighter_01_F"];
+// --- Vanilla CSAT fallbacks (used when sci-fi mod not loaded) ---
+private _vehiclesBasic         = ["O_Quadbike_01_F", "O_MRAP_02_F"];
+private _vehiclesLightUnarmed  = ["O_MRAP_02_F"];
+private _vehiclesLightArmed    = ["O_MRAP_02_hmg_F", "O_MRAP_02_gmg_F"];
+private _vehiclesTrucks        = ["O_Truck_02_transport_F", "O_Truck_02_covered_F"];
+private _vehiclesCargoTrucks   = ["O_Truck_02_box_F"];
+private _vehiclesLightAPCs     = ["O_APC_Wheeled_02_rcws_v2_F"];
+private _vehiclesAPCs          = ["O_APC_Tracked_02_cannon_F"];
+private _vehiclesIFVs          = ["O_APC_Tracked_02_cannon_F"];
+private _vehiclesTanks         = ["O_T_MBT_02_cannon_F"];   // CSAT Varsuk arid (user-requested buyable)
+private _vehiclesLightTanks    = ["O_AFV_Wheeled_02_cannon_F"];
+private _vehiclesAA            = ["O_APC_Tracked_02_AA_F"];
+private _vehiclesHelisLight    = ["O_Heli_Light_02_unarmed_F"];
+private _vehiclesHelisTransport = ["O_Heli_Transport_04_covered_F"];   // CSAT Taru covered as fallback
+private _vehiclesHelisLightAttack = ["O_Heli_Light_02_F"];
+private _vehiclesHelisAttack   = ["O_Heli_Attack_02_F"];                // CSAT Kajman
+private _vehiclesPlanesCAS     = ["O_Plane_CAS_02_F"];
+private _vehiclesPlanesAA      = ["O_Plane_Fighter_02_F"];
 private _vehiclesPlanesTransport = [];
-private _vehiclesMilitiaLightArmed = ["B_MRAP_01_hmg_F"];
-private _vehiclesMilitiaTrucks = ["B_Truck_01_transport_F"];
-private _vehiclesMilitiaCars = ["B_MRAP_01_F"];
-private _vehiclesPolice = ["B_MRAP_01_F"];
-private _vehiclesAirPatrol = ["B_Heli_Light_01_F"];
+private _vehiclesMilitiaLightArmed = ["O_MRAP_02_hmg_F"];
+private _vehiclesMilitiaTrucks = ["O_Truck_02_transport_F"];
+private _vehiclesMilitiaCars   = ["O_MRAP_02_F"];
+private _vehiclesPolice        = ["O_MRAP_02_F"];
+private _vehiclesAirPatrol     = ["O_Heli_Light_02_unarmed_F"];
+
+// --- Heavy / "Chinook role" troop transport: RHS Mi-8 if RHSAFRF loaded, else CSAT Taru ---
+if (isClass (configFile >> "cfgVehicles" >> "RHS_Mi8MT_vdv")) then {
+    _vehiclesHelisTransport = ["RHS_Mi8MT_vdv"];
+};
+
+// --- Sci-Fi Vehicles Pack overrides (TKE_Ext_*) ---
+// Bearcat IFV: roadblocks, light armed, light APC, militia roadblocks
+if (isClass (configFile >> "cfgVehicles" >> "TKE_Ext_Bearcat_Autocannon")) then {
+    _vehiclesLightArmed        = ["TKE_Ext_Bearcat_Autocannon"] + _vehiclesLightArmed;
+    _vehiclesLightAPCs         = ["TKE_Ext_Bearcat_Autocannon"] + _vehiclesLightAPCs;
+    _vehiclesMilitiaLightArmed = ["TKE_Ext_Bearcat_Autocannon"];
+};
+// Dragonfly: light helicopter, light attack, air patrol — and a separate "Huron heavy
+// transport" slot per user spec (B_Heli_Transport_03_F is vanilla NATO Huron, distinct
+// from the Chinook-role _vehiclesHelisTransport above).
+if (isClass (configFile >> "cfgVehicles" >> "TKE_Ext_Dragonfly_A")) then {
+    _vehiclesHelisLight        = ["TKE_Ext_Dragonfly_A"];
+    _vehiclesHelisLightAttack  = ["TKE_Ext_Dragonfly_A"];
+    _vehiclesAirPatrol         = ["TKE_Ext_Dragonfly_A"];
+};
+// Huron as the dedicated "heavy/utility transport" alongside the Chinook-role slot above.
+if (isClass (configFile >> "cfgVehicles" >> "B_Heli_Transport_03_F")) then {
+    _vehiclesHelisAttack = ["B_Heli_Transport_03_F"] + _vehiclesHelisAttack;
+};
 
 ["vehiclesBasic", _vehiclesBasic] call _fnc_saveToTemplate;
 ["vehiclesLightUnarmed", _vehiclesLightUnarmed] call _fnc_saveToTemplate;
 ["vehiclesLightArmed", _vehiclesLightArmed] call _fnc_saveToTemplate;
 ["vehiclesTrucks", _vehiclesTrucks] call _fnc_saveToTemplate;
 ["vehiclesCargoTrucks", _vehiclesCargoTrucks] call _fnc_saveToTemplate;
-["vehiclesAmmoTrucks", ["B_Truck_01_ammo_F"]] call _fnc_saveToTemplate;
-["vehiclesRepairTrucks", ["B_Truck_01_Repair_F"]] call _fnc_saveToTemplate;
-["vehiclesFuelTrucks", ["B_Truck_01_fuel_F"]] call _fnc_saveToTemplate;
-["vehiclesMedical", ["B_Truck_01_medical_F"]] call _fnc_saveToTemplate;
+["vehiclesAmmoTrucks", ["O_Truck_02_Ammo_F"]] call _fnc_saveToTemplate;
+["vehiclesRepairTrucks", ["O_Truck_02_box_F"]] call _fnc_saveToTemplate;
+["vehiclesFuelTrucks", ["O_Truck_02_fuel_F"]] call _fnc_saveToTemplate;
+["vehiclesMedical", ["O_Truck_02_medical_F"]] call _fnc_saveToTemplate;
 ["vehiclesLightAPCs", _vehiclesLightAPCs] call _fnc_saveToTemplate;
 ["vehiclesAPCs", _vehiclesAPCs] call _fnc_saveToTemplate;
 ["vehiclesIFVs", _vehiclesIFVs] call _fnc_saveToTemplate;
@@ -78,14 +105,44 @@ private _vehiclesAirPatrol = ["B_Heli_Light_01_F"];
 ["vehiclesPolice", _vehiclesPolice] call _fnc_saveToTemplate;
 ["vehiclesAirPatrol", _vehiclesAirPatrol] call _fnc_saveToTemplate;
 
-["staticMGs", ["B_HMG_01_high_F", "B_HMG_01_F"]] call _fnc_saveToTemplate;
-["staticAT", ["B_static_AT_F"]] call _fnc_saveToTemplate;
-["staticAA", ["B_static_AA_F"]] call _fnc_saveToTemplate;
-["staticMortars", ["B_Mortar_01_F"]] call _fnc_saveToTemplate;
-["staticHowitzers", []] call _fnc_saveToTemplate;
+// ----- Static emplacements -----
+// MG emplacement at airport/military base/outpost/factory/resource sites uses the raised
+// TacGirls Heavy MG when available, plus the Sci-Fi gatling for HMG variety. Falls back
+// to vanilla CSAT static HMG.
+private _staticMGs = ["O_HMG_01_high_F", "O_HMG_01_F"];
+if (isClass (configFile >> "cfgVehicles" >> "GFL_Heavy_Machine_Gun_Raised")) then {
+    _staticMGs = ["GFL_Heavy_Machine_Gun_Raised"] + _staticMGs;
+};
+if (isClass (configFile >> "cfgVehicles" >> "PHEN_TurretPack_B_Turret_01_GAU_FGrey_INDEP")) then {
+    _staticMGs pushBack "PHEN_TurretPack_B_Turret_01_GAU_FGrey_INDEP";
+};
+
+// AT: Sci-Fi Turret Pack cannon preferred, vanilla CSAT static AT fallback.
+private _staticAT = ["O_static_AT_F"];
+if (isClass (configFile >> "cfgVehicles" >> "PHEN_TurretPack_B_Turret_06_cannon_FGrey_INDEP")) then {
+    _staticAT = ["PHEN_TurretPack_B_Turret_06_cannon_FGrey_INDEP"] + _staticAT;
+};
+
+// AA: Sci-Fi Turret Pack HE autocannon preferred, vanilla CSAT static AA fallback.
+private _staticAA = ["O_static_AA_F"];
+if (isClass (configFile >> "cfgVehicles" >> "PHEN_TurretPack_B_Turret_03_FGrey_INDEP")) then {
+    _staticAA = ["PHEN_TurretPack_B_Turret_03_FGrey_INDEP"] + _staticAA;
+};
+
+// Buyable static howitzer: RHS D-30 (VDV) if RHSAFRF loaded, otherwise none.
+private _staticHowitzers = [];
+if (isClass (configFile >> "cfgVehicles" >> "rhs_D30_vdv")) then {
+    _staticHowitzers = ["rhs_D30_vdv"];
+};
+
+["staticMGs", _staticMGs] call _fnc_saveToTemplate;
+["staticAT", _staticAT] call _fnc_saveToTemplate;
+["staticAA", _staticAA] call _fnc_saveToTemplate;
+["staticMortars", ["O_Mortar_01_F"]] call _fnc_saveToTemplate;
+["staticHowitzers", _staticHowitzers] call _fnc_saveToTemplate;
 ["vehicleRadar", ""] call _fnc_saveToTemplate;
 ["vehicleSam", ""] call _fnc_saveToTemplate;
-["howitzerMagazineHE", ""] call _fnc_saveToTemplate;
+["howitzerMagazineHE", "rhs_mag_3OF56_30"] call _fnc_saveToTemplate;
 ["mortarMagazineHE", "3Rnd_82mm_Mo_shells"] call _fnc_saveToTemplate;
 ["mortarMagazineSmoke", "3Rnd_82mm_Mo_Smoke_white"] call _fnc_saveToTemplate;
 ["mortarMagazineFlare", ""] call _fnc_saveToTemplate;

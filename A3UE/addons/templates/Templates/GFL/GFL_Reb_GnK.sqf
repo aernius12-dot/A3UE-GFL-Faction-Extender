@@ -39,10 +39,31 @@ if (isClass (configFile >> "cfgVehicles" >> "EG_Mecha_FourFoot")) then {
     _vehiclesLightArmed pushBack "EG_Mecha_FourFoot";
 };
 
-// Sci-Fi vehicles pack: replace default squad transport with the Bearcat IFV
+// Sci-Fi vehicles pack: Bearcat IFV for roadblocks / armed ground transport.
 // (TKE_Ext_Bearcat_Autocannon — 30mm autocannon, 3 crew + 8 passengers)
 if (isClass (configFile >> "cfgVehicles" >> "TKE_Ext_Bearcat_Autocannon")) then {
-    _VehTruck = ["TKE_Ext_Bearcat_Autocannon"];
+    _vehiclesLightArmed = ["TKE_Ext_Bearcat_Autocannon"] + _vehiclesLightArmed;
+    _vehiclesAt         = ["TKE_Ext_Bearcat_Autocannon"];
+};
+
+// Sci-Fi helicopters: Dragonfly_A for light/attack, B_Heli_Transport_03_F (Huron) for heavy
+// utility, RHS Mi-8 (or CSAT Taru fallback) for the troop-transport / Chinook role.
+// These slots are buyable through the rebel garage; if Antistasi rebels never AI-spawn
+// them they're still useful to the player.
+private _vehiclesHelisLight = if (isClass (configFile >> "cfgVehicles" >> "TKE_Ext_Dragonfly_A")) then {
+    ["TKE_Ext_Dragonfly_A"]
+} else {
+    ["O_Heli_Light_02_unarmed_F"]
+};
+private _vehiclesHelisAttack = if (isClass (configFile >> "cfgVehicles" >> "B_Heli_Transport_03_F")) then {
+    ["B_Heli_Transport_03_F"]
+} else {
+    ["O_Heli_Attack_02_F"]
+};
+private _vehiclesHelisTransport = if (isClass (configFile >> "cfgVehicles" >> "RHS_Mi8MT_vdv")) then {
+    ["RHS_Mi8MT_vdv"]
+} else {
+    ["O_Heli_Transport_04_covered_F"]
 };
 
 ["vehiclesCivPlane", _vehicleCivPlane] call _fnc_saveToTemplate;
@@ -60,11 +81,42 @@ if (isClass (configFile >> "cfgVehicles" >> "TKE_Ext_Bearcat_Autocannon")) then 
 ["vehiclesLightUnarmed", _vehiclesLightUnarmed] call _fnc_saveToTemplate;
 ["vehiclesLightArmed", _vehiclesLightArmed] call _fnc_saveToTemplate;
 ["vehiclesAT", _vehiclesAt] call _fnc_saveToTemplate;
+["vehiclesHelisLight", _vehiclesHelisLight] call _fnc_saveToTemplate;
+["vehiclesHelisAttack", _vehiclesHelisAttack] call _fnc_saveToTemplate;
+["vehiclesHelisTransport", _vehiclesHelisTransport] call _fnc_saveToTemplate;
 
-["staticMGs", ["I_HMG_01_F", "I_HMG_01_high_F"]] call _fnc_saveToTemplate;
-["staticAT", ["I_static_AT_F"]] call _fnc_saveToTemplate;
-["staticAA", ["I_static_AA_F"]] call _fnc_saveToTemplate;
+// ----- Static emplacements -----
+// MG at airport/military base/outpost/factory/resource uses the raised TacGirls Heavy MG
+// when available, plus Sci-Fi gatling for HMG variety. Falls back to vanilla AAF (Indep) HMG.
+private _staticMGs = ["I_HMG_01_F", "I_HMG_01_high_F"];
+if (isClass (configFile >> "cfgVehicles" >> "GFL_Heavy_Machine_Gun_Raised")) then {
+    _staticMGs = ["GFL_Heavy_Machine_Gun_Raised"] + _staticMGs;
+};
+if (isClass (configFile >> "cfgVehicles" >> "PHEN_TurretPack_B_Turret_01_GAU_FGrey_INDEP")) then {
+    _staticMGs pushBack "PHEN_TurretPack_B_Turret_01_GAU_FGrey_INDEP";
+};
+
+private _staticAT = ["I_static_AT_F"];
+if (isClass (configFile >> "cfgVehicles" >> "PHEN_TurretPack_B_Turret_06_cannon_FGrey_INDEP")) then {
+    _staticAT = ["PHEN_TurretPack_B_Turret_06_cannon_FGrey_INDEP"] + _staticAT;
+};
+
+private _staticAA = ["I_static_AA_F"];
+if (isClass (configFile >> "cfgVehicles" >> "PHEN_TurretPack_B_Turret_03_FGrey_INDEP")) then {
+    _staticAA = ["PHEN_TurretPack_B_Turret_03_FGrey_INDEP"] + _staticAA;
+};
+
+// Buyable static howitzer: RHS D-30 (VDV) if RHSAFRF loaded, otherwise empty.
+private _staticHowitzers = [];
+if (isClass (configFile >> "cfgVehicles" >> "rhs_D30_vdv")) then {
+    _staticHowitzers = ["rhs_D30_vdv"];
+};
+
+["staticMGs", _staticMGs] call _fnc_saveToTemplate;
+["staticAT", _staticAT] call _fnc_saveToTemplate;
+["staticAA", _staticAA] call _fnc_saveToTemplate;
 ["staticMortars", ["I_Mortar_01_F"]] call _fnc_saveToTemplate;
+["staticHowitzers", _staticHowitzers] call _fnc_saveToTemplate;
 ["staticMortarMagHE", "3Rnd_82mm_Mo_shells"] call _fnc_saveToTemplate;
 ["staticMortarMagSmoke", "3Rnd_82mm_Mo_Smoke_white"] call _fnc_saveToTemplate;
 
