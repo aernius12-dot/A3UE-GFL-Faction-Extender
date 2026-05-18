@@ -169,29 +169,36 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
     _arges setUnitRecoilCoefficient 0.1;
     _arges setCustomAimCoef 0.05;
 
-    // Slip-through monitor (diagnostic + safety net): runs every 0.25 s.
-    // With XEH HandleDamage priority=-100 our return 0 wins the chain — no slip-through
-    // is expected. If `damage _arges > 0` here, something is bypassing HandleDamage
-    // entirely (direct setDamage from another script, engine internal damage path).
-    // Logs and resets so the situation is visible without killing the unit.
+    // Slip-through monitor: runs every 0.25 s in BOTH Corvus and non-Corvus mode.
+    // Last RPT showed our HD return is being overridden by something later in the
+    // chain (dmgApplied matched _damage at entry exactly, way above 1.0 → instakill).
+    // The HD-refresh PFH above tries to keep us last every 0.1 s, but if a hit lands
+    // in a refresh-window race, damage accumulates beyond 1.0 before the next refresh.
+    // This PFH catches that: if damage > 0 after a tick, reset to 0 + fullHeal.
+    // Caveat: setDamage 0 can't revive a unit whose damage reached 1.0 in the same
+    // physics tick (Killed EH fires synchronously). But for sub-lethal accumulation
+    // this catches it before the next hit pushes past 1.0.
     [{
         params ["_args", "_handle"];
         private _arges = _args select 0;
         if (!alive _arges || _arges getVariable ["GFL_ArgesState", "NONE"] != "ARGES") exitWith {
             [_handle] call CBA_fnc_removePerFrameHandler;
         };
-        if (_arges getVariable ["COR_SysEnabled", false]) then {
-            private _slipped = damage _arges;
-            private _filterCalls = _arges getVariable ["GFL_DiagFilterCalls", 0];
-            _arges setVariable ["GFL_DiagFilterCalls", 0];
-            if (_slipped > 0) then {
-                _arges setDamage 0;
-                if (!isNil "ace_medical_fnc_fullHeal") then { _arges call ace_medical_fnc_fullHeal; };
-                diag_log format ["[GFL Arges] Corvus slip-through suppressed: dmg was %1 (filterCalls=%2)", _slipped, _filterCalls];
-            } else {
-                if (_filterCalls > 0) then {
-                    diag_log format ["[GFL Diag] Tick: %1 filter calls, no slip-through", _filterCalls];
-                };
+        // Skip when in killing-Arges flow (we WANT damage to apply for clean death)
+        if (_arges getVariable ["GFL_ArgesKilling", false]) exitWith {};
+        if (_arges getVariable ["GFL_ArgesFainting", false]) exitWith {};
+
+        private _slipped = damage _arges;
+        private _filterCalls = _arges getVariable ["GFL_DiagFilterCalls", 0];
+        _arges setVariable ["GFL_DiagFilterCalls", 0];
+        if (_slipped > 0) then {
+            _arges setDamage 0;
+            if (!isNil "ace_medical_fnc_fullHeal") then { _arges call ace_medical_fnc_fullHeal; };
+            private _mode = if (_arges getVariable ["COR_SysEnabled", false]) then { "Corvus" } else { "non-Corvus" };
+            diag_log format ["[GFL Arges] %1 slip-through suppressed: dmg was %2 (filterCalls=%3)", _mode, _slipped, _filterCalls];
+        } else {
+            if (_filterCalls > 0) then {
+                diag_log format ["[GFL Diag] Tick: %1 filter calls, no slip-through", _filterCalls];
             };
         };
     }, 0.25, [_arges]] call CBA_fnc_addPerFrameHandler;
@@ -368,6 +375,10 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
     private _idx = _arges addEventHandler ["HandleDamage", _damageFilter];
     _arges setVariable ["GFL_LastHDIdx", _idx];
 
+    // 0.1 s interval — last RPT showed dmgApplied=4.36817 matching _damage at our HD
+    // entry, meaning something else ran after our refresh and returned the raw value.
+    // The 2 s interval was too slow; tighten to 10 Hz so any post-refresh re-registration
+    // is overtaken within 100 ms.
     [{
         params ["_args", "_handle"];
         private _arges  = _args select 0;
@@ -381,7 +392,7 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         };
         private _newIdx = _arges addEventHandler ["HandleDamage", _filter];
         _arges setVariable ["GFL_LastHDIdx", _newIdx];
-    }, 2, [_arges, _damageFilter]] call CBA_fnc_addPerFrameHandler;
+    }, 0.1, [_arges, _damageFilter]] call CBA_fnc_addPerFrameHandler;
 
     // DIAGNOSTIC: Hit EH fires AFTER engine applies damage from a hit. Useful for
     // confirming what damage actually got applied, separate from the HandleDamage chain.
