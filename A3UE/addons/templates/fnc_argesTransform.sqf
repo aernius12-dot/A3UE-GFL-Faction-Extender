@@ -122,28 +122,24 @@ _arges setVariable ["AE_Health", 9999, true];
 ];
 
 // --- Aegis damage filter ---
-// HandleDamage is registered via XEH config (Extended_HandleDamage_EventHandlers on
-// Arges_F) in config.cpp with priority=-100, running AFTER ACE Medical's priority=1.
-// Our return value of 0 is what the engine applies, beating ACE's chain return.
-// XEH handles registration across createUnit, locality transfer (selectPlayer), and JIP —
-// no manual addEventHandler is needed here.
-// The filter body lives in fnc_argesDamageFilter.sqf as GFL_fnc_argesDamageFilter.
+// HandleDamage is registered via direct addEventHandler below. The CBA XEH approach
+// (Extended_HandleDamage_EventHandlers) was tried twice with both Arges_F and CAManBase
+// inner classes — neither fired in RPT, so we use direct registration which is proven
+// to work (the original inline filter ran fine).
+//
+// _damageFilter is a thin wrapper that delegates to the global GFL_fnc_argesDamageFilter.
+// That global function is the single source of truth for the filter logic.
+//
+// Chain ordering: addEventHandler appends to the end of the EH list, so registering
+// after createUnit puts our EH AFTER ACE's XEH-registered EH. Engine fires EHs in
+// registration order; the LAST EH's return value wins. We return 0 → engine applies 0.
+private _damageFilter = { _this call GFL_fnc_argesDamageFilter };
 
-// (Inline _damageFilter removed — replaced by GFL_fnc_argesDamageFilter via XEH.)
-// Keep a minimal stub for backwards compatibility with code paths that still reference
-// `_damageFilter` until they're cleaned up. It's never actually invoked because the
-// XEH-registered function does all the work.
-private _damageFilter = {
-    // No-op stub. Real HD logic lives in GFL_fnc_argesDamageFilter and is wired via XEH.
-    // This stub exists so legacy references to `_damageFilter` (PFH args, remoteExec) keep
-    // compiling without runtime impact.
-    params ["_unit", "_selection", "_damage"];
-    _damage
-};
-
-// HandleDamage registration removed — XEH (Extended_HandleDamage_EventHandlers in config.cpp)
-// registers GFL_fnc_argesDamageFilter on every Arges_F unit with priority=-100, running
-// AFTER ACE Medical (priority=1) so our return-zero is what the engine applies.
+// Server-side registration — covers the window between createUnit and selectPlayer.
+// HandleDamage only fires on the locality owner. _arges is server-local until
+// selectPlayer transfers it to the client, so the server EH catches any hits
+// in that window (and on the server's hidden copy after selectPlayer).
+_arges addEventHandler ["HandleDamage", _damageFilter];
 
 // --- Authority ---
 if (leader _grp == _player) then { _grp selectLeader _arges; };
@@ -357,8 +353,12 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         { [player] remoteExec ["GFL_fnc_argesRevert", 2]; diag_log "[GFL Arges] Revert action used"; }
     ];
 
-    // HandleDamage is registered via XEH config — no inline removeAll + addEventHandler
-    // needed here. XEH re-attaches the EH on locality transfer (selectPlayer) and JIP.
+    // Client-side HD registration — covers all combat once the player controls Arges.
+    // Re-register here because locality has transferred from server to client via
+    // selectPlayer, and the server-side EH no longer fires (HandleDamage is locality-bound).
+    // No removeAllEventHandlers — appending is fine, ACE's XEH-init EH is at lower index
+    // so we run after it.
+    _arges addEventHandler ["HandleDamage", _damageFilter];
 
     // DIAGNOSTIC: Hit EH fires AFTER engine applies damage from a hit. Useful for
     // confirming what damage actually got applied, separate from the HandleDamage chain.

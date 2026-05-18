@@ -52,20 +52,10 @@ class cfgFunctions {
     };
 };
 
-// XEH HandleDamage hooked at CAManBase (universal infantry root) — Arges_F may not be
-// CBA-XEH-aware on its own (TacGirls inheritance). Filter exits early for non-Arges
-// units via the GFL_ArgesState guard, so this is a safe no-op for everyone else.
-// ACE Medical's HandleDamage has priority=1; we set priority=-100 so we run LAST in
-// the chain — our return value of 0 is what the engine applies, overriding ACE's cap.
-class Extended_HandleDamage_EventHandlers {
-    class CAManBase {
-        class GFL_Arges_HD {
-            priority = -100;
-            serverOnly = 0;
-            handleDamage = "_this call GFL_fnc_argesDamageFilter";
-        };
-    };
-};
+// (Extended_HandleDamage_EventHandlers tried with Arges_F and CAManBase inner classes —
+//  neither fired in RPT. CBA's XEH HandleDamage framework appears not to apply to this
+//  unit chain. HandleDamage is now registered via direct addEventHandler in
+//  fnc_argesTransform.sqf — guaranteed to fire on whichever machine has unit locality.)
 
 // Prevent ACE cardiac arrest on Arges_F units (Branch 2: ACE present, Corvus inactive).
 // Override the base wound handler key so ours runs in its place — avoids non-deterministic
