@@ -40,10 +40,13 @@ _arges setDir _dir;
 _arges setPosATL _pos;
 _arges setName (name _player);
 
-// allowDamage true: required for HandleDamage to fire so our HP pool code runs.
-// Our EH is registered after ACE's (post-transform vs ACE's mission-start XEH), so
-// our return value (0) is authoritative — hitpoints cannot accumulate.
-_arges allowDamage true;
+// allowDamage false: take the engine out of the damage loop entirely. With this,
+// HandleDamage never fires and engine hitpoints can't accumulate to 1.0 (no instakill).
+// The HitPart EH (registered later, fires regardless of allowDamage) drains the
+// GFL_ArgesHP pool and triggers death when HP reaches 0.
+// The 1 s PFH below flips allowDamage to true while COR_SysEnabled is active so
+// Corvus's wound chain (which requires HD) can run.
+_arges allowDamage false;
 
 // Aegis combat buffs — applied immediately on the server and maintained on the client.
 // These run regardless of whether the player activates Corvus (Corvus's own SysInit PFH
@@ -161,9 +164,10 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
 [{
     params ["_arges", "_damageFilter"];
 
-    // allowDamage true: HandleDamage must fire for our HP pool to run. TacGirls'
-    // hitboxinit.sqf (async init EH) can flip this back to false — PFH beats it each second.
-    _arges allowDamage true;
+    // Default state on client: allowDamage false (non-Corvus, engine cannot damage).
+    // The 1 s PFH below flips this to true if/when the player activates Corvus.
+    // TacGirls' hitboxinit may flip this around — our PFH wins within 1 s.
+    _arges allowDamage false;
     _arges enableStamina false;
     _arges setAnimSpeedCoef 1.4;
     _arges setUnitRecoilCoefficient 0.1;
@@ -214,7 +218,25 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         if (!alive _arges || _arges getVariable ["GFL_ArgesState", "NONE"] != "ARGES") exitWith {
             [_handle] call CBA_fnc_removePerFrameHandler;
         };
-        _arges allowDamage true;
+
+        // allowDamage toggle: drives the entire damage model.
+        //   Corvus active   → allowDamage true:  HD fires → ACE wound chain runs →
+        //                     Corvus's COR_fnc_damage processes hit (drains armor/coolant).
+        //                     Death only via COR_Shutdown (heat/coolant=0).
+        //   Corvus inactive → allowDamage false: HD cannot fire, engine cannot apply damage.
+        //                     HitPart EH (still fires) drains GFL_ArgesHP.
+        //                     Death only when HP pool reaches 0.
+        // The killing flow flips allowDamage back to true momentarily so setDamage 1 sticks.
+        if (_arges getVariable ["GFL_ArgesKilling", false]) then {
+            _arges allowDamage true;
+        } else {
+            if (_arges getVariable ["COR_SysEnabled", false]) then {
+                _arges allowDamage true;
+            } else {
+                _arges allowDamage false;
+            };
+        };
+
         _arges setVariable ["AE_Health", 9999, true];
         _arges enableStamina false;
         _arges setAnimSpeedCoef 1.4;
@@ -409,15 +431,93 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         ];
     }];
 
-    // DIAGNOSTIC: HitPart catches per-fragment hits from explosions and per-bullet hits.
-    // _hitData is an array of hit entries; we log a compact summary per entry.
+    // HitPart-based HP pool drain for non-Corvus mode.
+    //
+    // Why HitPart instead of HandleDamage: chain ordering is unreliable — RPT shows
+    // dmgApplied matching engine-raw _damage values (4.4+), meaning some other handler
+    // wins the chain and our return 0 is overridden. With allowDamage false, the engine
+    // can't apply damage at all and the HD chain doesn't fire. HitPart fires regardless
+    // of allowDamage (it's a hit-detection event, not a damage-application one).
+    //
+    // Result: engine damage is impossible (allowDamage false), HP pool is the SOLE death
+    // path, and the player gets Corvus-like tankiness without needing real Corvus active.
+    //
+    // Corvus active: skip — Corvus owns its own armor/coolant model via the wound chain.
     _arges addEventHandler ["HitPart", {
         params ["_hitData"];
         {
             _x params ["_target", "_shooter", "_proj", "_pos", "_vel", "_normal", "_ammoCfg", "_radius", "_partHash"];
-            diag_log format ["[GFL Diag] HitPart: proj=%1 shooter=%2 ammoCfg=%3 partHash=%4 dmgNow=%5 alive=%6",
-                _proj, _shooter, _ammoCfg, _partHash, damage _target, alive _target
-            ];
+            if (_target getVariable ["GFL_ArgesState", "NONE"] != "ARGES")  then { continue };
+            if (_target getVariable ["GFL_ArgesKilling", false])             then { continue };
+            if (_target getVariable ["GFL_ArgesFainting", false])            then { continue };
+            if (_target getVariable ["COR_SysEnabled", false])               then { continue };
+            if (_proj isEqualTo "")                                          then { continue };
+
+            private _hit = getNumber (configFile >> "CfgAmmo" >> _proj >> "hit");
+            if (_hit < 8) then { continue };
+
+            private _cost = switch (true) do {
+                case (_hit < 30):  { 2  };
+                case (_hit < 100): { 5  };
+                case (_hit < 300): { 7  };
+                default            { 15 };
+            };
+            private _hp = (_target getVariable ["GFL_ArgesHP", 100]) - _cost;
+            _target setVariable ["GFL_ArgesHP", _hp max 0, true];
+
+            diag_log format ["[GFL Arges] HitPart drain: proj=%1 hit=%2 cost=%3 HP=%4", _proj, _hit, _cost, _hp max 0];
+
+            if (_hp <= 0 && !(_target getVariable ["GFL_ArgesFainting", false])) then {
+                _target setVariable ["GFL_ArgesFainting", true];
+
+                private _identity = _target getVariable ["GFL_ArgesIdentity", []];
+                private _oldBody  = _target getVariable ["GFL_OldBody",       objNull];
+                private _grp      = group _target;
+                private _isLeader = (leader _grp == _target);
+                private _isBoss   = (!isNil "theBoss" && { _target == theBoss } && { !isNil "A3A_fnc_theBossTransfer" });
+
+                if (isNull _oldBody || _identity isEqualTo []) then {
+                    [{
+                        params ["_u"];
+                        _u setVariable ["GFL_ArgesKilling", true];
+                        _u allowDamage true;
+                        _u setDamage 1;
+                    }, [_target], 0] call CBA_fnc_waitAndExecute;
+                } else {
+                    [{
+                        params ["_unit", "_oldBody", "_grp", "_identity", "_isLeader", "_isBoss"];
+                        if (!isNil "ace_medical_fnc_setUnconscious") then {
+                            [_unit, true] call ace_medical_fnc_setUnconscious;
+                        };
+                        private _prevOutfit = _identity # 4;
+                        private _dl = getUnitLoadout _oldBody;
+                        _dl set [3, if (_prevOutfit != "") then { [_prevOutfit, []] } else { [] }];
+                        _oldBody setVariable ["unitType",       _identity # 0,                               true];
+                        _oldBody setVariable ["A3A_playerUID",  _identity # 1,                               true];
+                        _oldBody setVariable ["moneyX",         _unit getVariable ["moneyX", _identity # 2], true];
+                        _oldBody setVariable ["owner",          _oldBody,                                     true];
+                        _oldBody setVariable ["eligible",       _unit getVariable ["eligible", false],        true];
+                        _oldBody setVariable ["GFL_ArgesState", "NONE",                                       true];
+                        _oldBody hideObjectGlobal    false;
+                        _oldBody enableSimulationGlobal true;
+                        _oldBody setPosATL getPosATL _unit;
+                        _oldBody setDir    getDir    _unit;
+                        selectPlayer _oldBody;
+                        _unit setVariable ["GFL_OldBody",       objNull, true];
+                        _unit setVariable ["GFL_ArgesState",    "NONE",  true];
+                        _unit setVariable ["GFL_ArgesIdentity", [],      true];
+                        [_oldBody] join _grp;
+                        _oldBody setUnitLoadout _dl;
+                        if (_isLeader) then { _grp selectLeader _oldBody; };
+                        if (_isBoss)   then { [_oldBody, true] remoteExec ["A3A_fnc_theBossTransfer", 2]; };
+                        [{ (_this select 0) setDamage 1; }, [_oldBody], 0.5] call CBA_fnc_waitAndExecute;
+                        _unit setVariable ["GFL_ArgesKilling", true];
+                        _unit allowDamage true;
+                        [{ deleteVehicle (_this select 0); }, [_unit], 3] call CBA_fnc_waitAndExecute;
+                        diag_log "[GFL Arges] HitPart HP=0: faint initiated — TDoll kill 0.5 s, Arges NPC delete 3 s";
+                    }, [_target, _oldBody, _grp, _identity, _isLeader, _isBoss], 0] call CBA_fnc_waitAndExecute;
+                };
+            };
         } forEach _hitData;
     }];
 
