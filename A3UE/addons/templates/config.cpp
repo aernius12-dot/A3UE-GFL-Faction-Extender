@@ -52,13 +52,13 @@ class cfgFunctions {
     };
 };
 
-// XEH HandleDamage on Arges_F class — CBA registers this on every Arges_F unit
-// automatically across createUnit, locality transfer (selectPlayer), respawn, and JIP.
+// XEH HandleDamage hooked at CAManBase (universal infantry root) — Arges_F may not be
+// CBA-XEH-aware on its own (TacGirls inheritance). Filter exits early for non-Arges
+// units via the GFL_ArgesState guard, so this is a safe no-op for everyone else.
 // ACE Medical's HandleDamage has priority=1; we set priority=-100 so we run LAST in
-// the chain — our return value of 0 is what the engine applies, overriding ACE's cap
-// (which would otherwise return ~1 for severe hits and trigger instant death).
+// the chain — our return value of 0 is what the engine applies, overriding ACE's cap.
 class Extended_HandleDamage_EventHandlers {
-    class Arges_F {
+    class CAManBase {
         class GFL_Arges_HD {
             priority = -100;
             serverOnly = 0;

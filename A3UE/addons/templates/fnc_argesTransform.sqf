@@ -267,15 +267,19 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
             // (removed: COR_CoolantVolume reset — coolant must be allowed to drain so
             //  Corvus can shut down naturally and the redirect path triggers death.)
 
-            // Heat maintenance: fn_heating.sqf runs every 0.5 s.  When COR_Heat >= 110 it
-            // calls `_unit setDamage 1` directly — bypassing HandleDamage entirely.  This is
-            // what was killing Arges after ~16-44 s (timing varies with module count and FPS).
-            // Root cause: each active Corvus module raises COR_staticHeating; once it exceeds
-            // the cooling coefficient (1.5 at 100% coolant) heat accumulates to the kill point.
-            // Fix: Arges IS the Corvus frame — she dissipates heat intrinsically.  Reset heat
-            // and static heating every tick so the kill threshold is never reached.
-            _arges setVariable ["COR_Heat",          30, true];
-            _arges setVariable ["COR_staticHeating",  1, true];
+            // Heat handling: let heat rise naturally so the user has feedback that the
+            // system is overheating, but pre-empt fn_heating's setDamage 1 at 110°C by
+            // triggering COR_Shutdown ourselves when heat passes 100°C. Job 2 below
+            // catches the shutdown and redirects control to TDoll (clean death path).
+            //
+            // We still clamp staticHeating to 1 so module count doesn't cause runaway
+            // heat — keeps the curve gentle enough that the user can react before death.
+            _arges setVariable ["COR_staticHeating", 1, true];
+            private _heat = _arges getVariable ["COR_Heat", 30];
+            if (_heat >= 100 && !(_arges getVariable ["COR_Shutdown", false])) then {
+                diag_log format ["[GFL Arges] Heat threshold reached (%1°C) — triggering COR_Shutdown", _heat];
+                _arges setVariable ["COR_Shutdown", true, true];
+            };
             // Diagnostic: log vitals every 0.25 s. Includes AE_Health, ACE medical state,
             // and lifeState so we can correlate "Killed" events with non-engine-damage paths
             // (TacGirls AE_Health setDamage 1, ACE setDead, unconscious-to-dead transitions).
