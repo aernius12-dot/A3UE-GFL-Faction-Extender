@@ -18,6 +18,17 @@ diag_log "[GFL Corvus] fnc_corvusInit running on server";
 
 private _fccPacks = ["TDoll_B_Pack", "TDoll_V_Pack", "TDoll_Sup_Pack", "TDoll_Sent_Pack", "TDoll_Bul_Pack"];
 
+// Hostile-AI armor scaling. Rebel-side units (Petros / GnK / recruited squadmates) get
+// the full frameArmor from the backpack config; west/east AI (ELMO, Sangvis, Mangi,
+// Varjagers, Paradeus) get reduced values so they're not bullet sponges.
+GFL_CorvusHostileArmor = createHashMapFromArray [
+    ["TDoll_Bul_Pack",  130],
+    ["TDoll_Sent_Pack",  90],
+    ["TDoll_Sup_Pack",   60],
+    ["TDoll_V_Pack",     60],
+    ["TDoll_B_Pack",     40]
+];
+
 // Guarantee the caliber gate is active on the server regardless of CBA settings propagation.
 // COR_fnc_damage reads COR_AArmor from missionNamespace; if the CBA callback never ran on
 // the server the variable is nil (falsy) and the 4-shot mechanic silently does nothing.
@@ -38,6 +49,10 @@ GFL_fnc_corvusInitUnit = {
     if (!(backpack _unit in _fccPacks)) exitWith {};
     if (_unit getVariable ["GFL_COR_InitDone", false]) exitWith {};
 
+    // Toggle: skip buff entirely for hostile (west/east) AI when disabled. Rebels always get it.
+    private _isHostile = (side group _unit) in [west, east];
+    if (_isHostile && {!(missionNamespace getVariable ["GFL_CorvusBuffHostileAI", true])}) exitWith {};
+
     _unit setVariable ["GFL_COR_InitDone", true, true];
 
     // Per-unit cleanup: CORVUS's COR_fnc_damage sets the global COR_FluidLoss_EH on
@@ -55,8 +70,14 @@ GFL_fnc_corvusInitUnit = {
     }];
 
     private _pbp   = backpack _unit;
-    private _armor = getNumber (configFile >> "cfgVehicles" >> _pbp >> "frameArmor");
+    private _baseArmor = getNumber (configFile >> "cfgVehicles" >> _pbp >> "frameArmor");
     private _frame = getText  (configFile >> "cfgVehicles" >> _pbp >> "frameType");
+    // Apply hostile-AI nerf — rebels get full _baseArmor, hostile sides use the GFL_CorvusHostileArmor table.
+    private _armor = if (_isHostile) then {
+        GFL_CorvusHostileArmor getOrDefault [_pbp, _baseArmor]
+    } else {
+        _baseArmor
+    };
 
     // Core CORVUS state — read by COR_fnc_damage and repair actions
     _unit setVariable ["COR_SysEnabled",          true,  true];
@@ -87,7 +108,7 @@ GFL_fnc_corvusInitUnit = {
     _unit setUnitRecoilCoefficient 0.1;
     _unit setCustomAimCoef 0.05;
 
-    diag_log format ["[GFL Corvus] unit=%1 pack=%2 frame=%3 armor=%4", _unit, _pbp, _frame, _armor];
+    diag_log format ["[GFL Corvus] unit=%1 pack=%2 frame=%3 armor=%4 hostile=%5", _unit, _pbp, _frame, _armor, _isHostile];
 
     // Per-unit maintenance handler — mirrors CORVUS's own EH logic for AI
     [{

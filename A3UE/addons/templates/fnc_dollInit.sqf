@@ -6,6 +6,11 @@ missionNamespace setVariable ["GFL_DollInitLoaded", true];
 
 diag_log "[GFL DollInit] registering face/uniform and ELMO weapon resolver";
 
+// Counter for periodic resolution-summary log. Reset on script reload so summaries restart
+// fresh per mission.
+GFL_DollResolveCount = 0;
+GFL_DollResolveLastLogged = 0;
+
 GFL_FaceUniformMap = createHashMapFromArray [
     ["alvaface", "alva_uniform"], ["balthildeface", "balthilde_uniform"],
     ["bastiface", "basti_uniform"], ["centaureissiface", "centaureissi_uniform"],
@@ -439,6 +444,7 @@ GFL_fnc_isElmoUnit = {
 GFL_fnc_tryResolveElmoUnit = {
     params ["_unit"];
     if !([_unit] call GFL_fnc_isElmoUnit) exitWith { false };
+    if !(missionNamespace getVariable ["GFL_DollMatchHostileAI", true]) exitWith { false };
 
     private _class = [_unit] call GFL_fnc_getUnitClass;
     private _allowed = [_class] call GFL_fnc_getAllowedFamiliesForClass;
@@ -487,7 +493,13 @@ GFL_fnc_tryResolveElmoUnit = {
     // has to fight a stable target.
     [_unit, _uniform, _face] call GFL_fnc_applyFaceUniform;
 
-    diag_log format ["[GFL DollInit] ELMO resolved unit=%1 class=%2 face=%3 role=%4 family=%5 weapon=%6 kept=%7", _unit, _class, _face, _role, _family, _weaponClass, _keepFace];
+    // Per-unit verbose log replaced with a counter to keep the RPT quiet in large engagements.
+    // We emit a summary line every 10 resolutions and on the first one.
+    GFL_DollResolveCount = GFL_DollResolveCount + 1;
+    if (GFL_DollResolveCount isEqualTo 1 || {GFL_DollResolveCount - GFL_DollResolveLastLogged >= 10}) then {
+        diag_log format ["[GFL DollInit] resolved %1 ELMO units so far (latest: %2 / %3 / %4)", GFL_DollResolveCount, _face, _family, _weaponClass];
+        GFL_DollResolveLastLogged = GFL_DollResolveCount;
+    };
     [_unit, _face, _uniform, _weaponClass, _fccPack] call GFL_fnc_isElmoResolved
 };
 
@@ -534,6 +546,9 @@ addMissionEventHandler ["EntityCreated", {
     [{ params ["_unit"]; [_unit] call GFL_fnc_processDollUnit; }, [_unit], 1] call CBA_fnc_waitAndExecute;
 }];
 
+// Safety-net scans: catch units that existed before this script ran or whose EntityCreated
+// fired before locality settled. Two one-shot sweeps replace the previous perpetual 15s PFH —
+// once resolved, units stay resolved via GFL_DollInitDone, so periodic re-checking is wasted.
 [{
     {
         [_x] call GFL_fnc_processDollUnit;
@@ -544,4 +559,5 @@ addMissionEventHandler ["EntityCreated", {
     {
         [_x] call GFL_fnc_processDollUnit;
     } forEach allUnits;
-}, 15, []] call CBA_fnc_addPerFrameHandler;
+    diag_log format ["[GFL DollInit] 10s safety-net scan complete (%1 ELMO units resolved total)", GFL_DollResolveCount];
+}, [], 10] call CBA_fnc_waitAndExecute;
