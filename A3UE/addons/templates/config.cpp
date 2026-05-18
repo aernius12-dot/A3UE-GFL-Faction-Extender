@@ -65,7 +65,7 @@ class ACE_Medical_Injuries {
 
 class Extended_PreInit_EventHandlers {
     class GFL_SettingsInit {
-        init = "call GFL_fnc_settingsInit;";
+        init = "call compile preprocessFileLineNumbers '\x\A3UE\addons\templates\fnc_settingsInit.sqf';";
     };
 };
 
