@@ -16,4 +16,18 @@ Info("settingsInit started — registering GFL Antistasi addon settings");
     }
 ] call CBA_fnc_addSetting;
 
+// Petros display name (chat / group label)
+[
+    "GFL_petrosNameSetting",
+    "LIST",
+    ["Petros Name", "Display name shown for Petros in chat, group label, and HUD."],
+    "GFL Antistasi",
+    [[0, 1, 2, 3], ["Petros", "John Frontline", "Commander", "Shikikan"], 0],
+    1,
+    {
+        params ["_value"];
+        diag_log format ["[GFL Settings] GFL_petrosNameSetting changed to %1", _value];
+    }
+] call CBA_fnc_addSetting;
+
 Info("settingsInit finished");

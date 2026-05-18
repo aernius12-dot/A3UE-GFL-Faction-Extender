@@ -234,18 +234,53 @@ addMissionEventHandler ["EntityCreated", {
     }, [_unit], 0.5] call CBA_fnc_waitAndExecute;
 }];
 
-// Petros head override — server-side poll every 3 s.
-// Idempotent: only fires setFace when setting is on AND current face differs.
-// Handles initial spawn, respawn, and runtime setting changes without relying on
-// EntityCreated timing (A3A_fnc_createUnit's internal spawn path can vary).
+// Petros identity override (head + name) — server-side 3 s poll.
+// Idempotent via per-unit signature variable so we only call setIdentity when the
+// applied combo changes. Variable resets automatically on respawn since the new
+// petros object starts with no variables set.
 if (isServer) then {
-    diag_log "[GFL PetrosHead] Registering perFrame poll handler (3 s interval)";
+    diag_log "[GFL PetrosIdentity] Registering perFrame poll handler (3 s interval)";
+
+    // [firstName, lastName] pairs, indexed by GFL_petrosNameSetting
+    GFL_petrosNameOptions = [
+        ["Petros", ":)"],
+        ["John", "Frontline"],
+        ["Commander", ""],
+        ["Shikikan", ""]
+    ];
+
     [{
         if (isNull petros || !alive petros) exitWith {};
-        if ((missionNamespace getVariable ["GFL_petrosHeadSetting", 0]) != 1) exitWith {};
-        if (face petros isEqualTo "commandermaleface") exitWith {};
-        private _oldFace = face petros;
-        petros setFace "commandermaleface";
-        diag_log format ["[GFL PetrosHead] Swapped petros face: %1 -> commandermaleface (setting=%2)", _oldFace, GFL_petrosHeadSetting];
+
+        private _headSetting = missionNamespace getVariable ["GFL_petrosHeadSetting", 0];
+        private _nameSetting = missionNamespace getVariable ["GFL_petrosNameSetting", 0];
+        private _signature = format ["h%1_n%2", _headSetting, _nameSetting];
+
+        if ((petros getVariable ["GFL_appliedIdentity", ""]) isEqualTo _signature) exitWith {};
+
+        // Head: default "GreekHead_A3_01" (what initPetros applies), or commandermaleface
+        private _desiredFace = if (_headSetting isEqualTo 1) then { "commandermaleface" } else { "GreekHead_A3_01" };
+
+        // Name: clamp index into options
+        private _idx = (_nameSetting max 0) min ((count GFL_petrosNameOptions) - 1);
+        (GFL_petrosNameOptions select _idx) params ["_firstName", "_lastName"];
+
+        // Use Antistasi's identity setter (same pattern as fn_initPetros) so the
+        // face + name pair are applied together and MP-synced consistently.
+        private _identity = createHashMapFromArray [
+            ["face", _desiredFace],
+            ["speaker", "Male01GRE"],
+            ["pitch", 1.1],
+            ["firstName", _firstName],
+            ["lastName", _lastName]
+        ];
+        [petros, _identity] call A3A_fnc_setIdentity;
+
+        // Update group label so the HUD / map shows the chosen name too
+        group petros setGroupIdGlobal [_firstName, "GroupColor4"];
+
+        petros setVariable ["GFL_appliedIdentity", _signature, true];
+
+        diag_log format ["[GFL PetrosIdentity] Applied face=%1 firstName=%2 lastName=%3 (h=%4 n=%5)", _desiredFace, _firstName, _lastName, _headSetting, _nameSetting];
     }, 3] call CBA_fnc_addPerFrameHandler;
 };
