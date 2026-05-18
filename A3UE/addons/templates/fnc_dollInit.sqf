@@ -70,14 +70,14 @@ private _profileRows = [
     ["alvaface", "AlvaFace", "alva_uniform", "Support", "AR", ["an-94", "an94"]],
     ["balthildeface", "BalthildeFace", "balthilde_uniform", "Support", "MG", ["lahti", "m/26", "m26"]],
     ["bastiface", "BastiFace", "basti_uniform", "Support", "HG", ["mark 23", "mk23", "socom"]],
-    ["centaureissiface", "CentaureissiFace", "centaureissi_uniform", "Support", "AR", ["centaureissigun", "g36"]],
+    ["centaureissiface", "CentaureissiFace", "centaureissi_uniform", "Support", "AR", ["g36"]],
     ["cheetaface", "CheetaFace", "cheeta_uniform", "Support", "SMG", ["mp7"]],
     ["cheyanneface", "CheyanneFace", "cheyanne_uniform", "Sentinel", "RF", ["m200", "cheytac"]],
-    ["grozaface", "GrozaFace", "groza_uniform", "Bulwark", "AR", ["grozagun", "ots-14", "ots14", "groza"]],
+    ["grozaface", "GrozaFace", "groza_uniform", "Bulwark", "AR", ["ots-14", "ots14", "groza"]],
     ["harpsyface", "HarpsyFace", "harpsy_uniform", "Vanguard", "SMG", ["steyr smg", "tmp"]],
     ["helenface", "HelenFace", "helen_uniform", "Bulwark", "SG", ["dp-12", "dp12"]],
     ["jiangyuface", "JiangyuFace", "jiangyu_uniform", "Support", "AR", ["type 97", "type97", "qbz-97", "qbz97"]],
-    ["klukaiface", "KlukaiFace", "klukai_uniform", "Sentinel", "AR", ["klukaigun", "hk416", "416"]],
+    ["klukaiface", "KlukaiFace", "klukai_uniform", "Sentinel", "AR", ["hk416", "416"]],
     ["lainiealtface", "LainieAltFace", "lainiealt_uniform", "Sentinel", "SMG", ["ump40", "ump-40"]],
     ["levaface", "LevaFace", "Leva_uniform", "Sentinel", "SMG", ["ump45", "ump-45"]],
     ["lindface", "LindFace", "lind_uniform", "Sentinel", "SG", ["aa-12", "aa12"]],
@@ -102,8 +102,8 @@ private _profileRows = [
     ["tololoface", "TololoFace", "tololo_uniform", "Sentinel", "AR", ["ak-alfa", "akalfa", "ak alfa"]],
     ["ullridface", "UllridFace", "ullrid_uniform", "Vanguard", "BLD", ["pluma edge"]],
     ["ump9face", "UMP9Face", "ump9_uniform", "Support", "SMG", ["ump9", "ump-9"]],
-    ["vectorface", "VectorFace", "vector_uniform", "Support", "SMG", ["vectorgun", "vector", "kriss"]],
-    ["vectoraltface", "VectorAltFace", "vectoralt_uniform", "Support", "SMG", ["vectorgun", "vector", "kriss"]],
+    ["vectorface", "VectorFace", "vector_uniform", "Support", "SMG", ["vector", "kriss"]],
+    ["vectoraltface", "VectorAltFace", "vectoralt_uniform", "Support", "SMG", ["vector", "kriss"]],
     ["voymastinaface", "VoymastinaFace", "voymastina_uniform", "Sentinel", "AR", ["ak-15", "ak15"]],
     ["yooheeface", "YooheeFace", "yoohee_uniform", "Support", "AR", ["k2"]],
     ["zhaohuiface", "ZhaohuiFace", "zhaohui_uniform", "Vanguard", "SMG", ["cs/ls06", "csls06", "ls06"]],
@@ -269,11 +269,17 @@ GFL_fnc_applyFaceUniform = {
         _unit setVariable ["GFL_FaceUniformDone", true];
     };
 
-    private _loadout = getUnitLoadout _unit;
-    private _uniformSlot = _loadout param [3, []];
-    private _uniformItems = if (_uniformSlot isEqualType [] && {count _uniformSlot > 1}) then { _uniformSlot # 1 } else { [] };
-    _loadout set [3, [_uniform, _uniformItems]];
-    _unit setUnitLoadout _loadout;
+    // TacGirls uniforms ARE the doll's body model — equipping one swaps the silhouette.
+    // setUnitLoadout alone doesn't always force the body mesh to refresh when the
+    // previous uniform had different storage characteristics, so we go through the
+    // direct removeUniform / forceAddUniform path. Items already in the uniform slot
+    // are saved and re-added (capacity permitting; addItemToUniform silently drops
+    // overflow).
+    private _uniformContents = uniformItems _unit;
+    removeUniform _unit;
+    _unit forceAddUniform _uniform;
+    { _unit addItemToUniform _x } forEach _uniformContents;
+
     _unit setVariable ["GFL_FaceUniformDone", true];
 };
 

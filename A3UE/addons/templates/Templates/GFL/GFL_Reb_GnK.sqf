@@ -21,7 +21,9 @@
 
 private _vehiclesBasic = ["I_Quadbike_01_F", "I_MRAP_03_F"];
 private _vehiclesLightUnarmed = ["I_MRAP_03_F"];
-private _vehiclesLightArmed = ["I_MRAP_03_gmg_F", "I_MRAP_03_hmg_F"];
+// Roadblock vehicle: CSAT Marshall (wheeled APC) fallback per user spec ("whatever CSAT
+// APC available"). Bearcat IFV prepended below when Sci-Fi Vehicles Pack is loaded.
+private _vehiclesLightArmed = ["O_APC_Wheeled_02_rcws_v2_F", "I_MRAP_03_gmg_F", "I_MRAP_03_hmg_F"];
 private _vehiclesAt = ["I_MRAP_03_gmg_F"];
 private _VehTruck = ["I_Truck_02_transport_F", "I_Truck_02_covered_F"];
 private _vehicleAA = ["I_APC_Wheeled_03_cannon_F"];
