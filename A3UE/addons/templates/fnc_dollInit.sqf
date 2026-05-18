@@ -121,7 +121,7 @@ GFL_ElmoUniforms = [];
 
 {
     _x params ["_key", "_face", "_uniform", "_role", "_family", "_hints"];
-    private _profile = [_face, _uniform, _role, _family, _hints, [_role] call _packForRole];
+    private _profile = [_key, _face, _uniform, _role, _family, _hints, [_role] call _packForRole];
     GFL_ElmoProfileMap set [_key, _profile];
     GFL_ElmoFaceKeys pushBack _key;
     GFL_ElmoUniforms pushBack _uniform;
@@ -278,7 +278,7 @@ GFL_fnc_scoreWeaponCandidate = {
 
 GFL_fnc_selectWeaponForProfile = {
     params ["_profile", "_requireUGL"];
-    _profile params ["", "", "", "_family", "_hints"];
+    _profile params ["", "", "", "", "_family", "_hints"];
 
     private _entries = +((call GFL_fnc_buildWeaponCatalog) getOrDefault [[_family] call GFL_fnc_getEffectiveWeaponFamily, []]);
     if (_requireUGL) then {
@@ -308,6 +308,20 @@ GFL_fnc_selectWeaponForProfile = {
 
 GFL_fnc_selectElmoProfile = {
     params ["_unit", "_family", "_requireUGL"];
+
+    private _lockedKey = _unit getVariable ["GFL_ElmoProfileKey", ""];
+    if (_lockedKey != "") then {
+        private _lockedProfile = GFL_ElmoProfileMap getOrDefault [_lockedKey, []];
+        if !(_lockedProfile isEqualTo []) then {
+            _lockedProfile params ["", "", "", "", "_lockedFamily"];
+            if (_lockedFamily isEqualTo _family) then {
+                private _lockedWeapon = [_lockedProfile, _requireUGL] call GFL_fnc_selectWeaponForProfile;
+                if ((_lockedWeapon getOrDefault ["score", -1]) >= 0) exitWith {
+                    [_lockedProfile, _lockedWeapon]
+                };
+            };
+        };
+    };
 
     private _candidates = +(GFL_ElmoProfilesByFamily getOrDefault [_family, []]);
     if (_candidates isEqualTo []) exitWith { [] };
@@ -406,6 +420,15 @@ GFL_fnc_assignFccBackpack = {
     _unit setUnitLoadout _loadout;
 };
 
+GFL_fnc_isElmoResolved = {
+    params ["_unit", "_face", "_uniform", "_weaponClass", "_fccPack"];
+    if (toLower (face _unit) != toLower _face) exitWith { false };
+    if !(uniform _unit isEqualTo _uniform) exitWith { false };
+    if (_weaponClass != "" && {primaryWeapon _unit != _weaponClass}) exitWith { false };
+    if (_fccPack != "" && {isClass (configFile >> "CfgVehicles" >> "TDoll_B_Pack")} && {backpack _unit != _fccPack}) exitWith { false };
+    true
+};
+
 GFL_fnc_isElmoUnit = {
     params ["_unit"];
     // ELMO can be used as either Occupant or Invader, so allow both military AI sides.
@@ -432,7 +455,10 @@ GFL_fnc_tryResolveElmoUnit = {
     };
 
     _selection params ["_profile", "_weaponEntry"];
-    _profile params ["_face", "_uniform", "_role", "", "", "_fccPack"];
+    _profile params ["_profileKey", "_face", "_uniform", "_role", "", "", "_fccPack"];
+    private _weaponClass = _weaponEntry getOrDefault ["class", ""];
+
+    _unit setVariable ["GFL_ElmoProfileKey", _profileKey];
 
     [_unit, _uniform, _face] call GFL_fnc_applyFaceUniform;
     [_unit, _weaponEntry] call GFL_fnc_swapPrimaryWeapon;
@@ -441,8 +467,11 @@ GFL_fnc_tryResolveElmoUnit = {
         [_unit, _fccPack] call GFL_fnc_assignFccBackpack;
     };
 
+    // Re-apply after weapon/backpack edits so late loadout churn has to fight a stable target.
+    [_unit, _uniform, _face] call GFL_fnc_applyFaceUniform;
+
     diag_log format ["[GFL DollInit] ELMO resolved unit=%1 face=%2 role=%3 family=%4 weapon=%5", _unit, _face, _role, _family, _weaponEntry getOrDefault ["class", ""]];
-    true
+    [_unit, _face, _uniform, _weaponClass, _fccPack] call GFL_fnc_isElmoResolved
 };
 
 GFL_fnc_processDollUnit = {
@@ -450,12 +479,16 @@ GFL_fnc_processDollUnit = {
     if (!alive _unit || isPlayer _unit || !local _unit) exitWith {};
     if (_unit getVariable ["GFL_DollInitDone", false]) exitWith {};
 
-    if ([_unit] call GFL_fnc_tryResolveElmoUnit) exitWith {
-        _unit setVariable ["GFL_DollInitDone", true];
+    if ([_unit] call GFL_fnc_isElmoUnit) exitWith {
+        if ([_unit] call GFL_fnc_tryResolveElmoUnit) then {
+            _unit setVariable ["GFL_DollInitDone", true];
+        };
     };
 
     if ([_unit] call GFL_fnc_applyFaceUniformFromCurrentFace) then {
         _unit setVariable ["GFL_DollInitDone", true];
+    } else {
+        _unit setVariable ["GFL_DollInitDone", false];
     };
 };
 

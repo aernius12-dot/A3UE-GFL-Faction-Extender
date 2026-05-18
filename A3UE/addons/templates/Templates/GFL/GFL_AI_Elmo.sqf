@@ -132,7 +132,7 @@ private _loadoutData = call _fnc_createLoadoutData;
 
 // ----- Uniforms / Appearance -----
 // TacGirls uniforms ARE the T-Doll character models — equipping one swaps the full body mesh.
-// bc036 Invisible Gear hides equipped vests/helmets visually; vanilla items are kept for armor stats.
+// ELMO uses bc036 Invisible Gear only for vests/headgear so the dolls keep their full model silhouettes.
 private _uniforms = [
     // tacgirls_elmo (27)
     "alva_uniform", "balthilde_uniform", "basti_uniform", "centaureissi_uniform",
@@ -155,17 +155,21 @@ private _uniforms = [
 ];
 
 private _vests = [
-    "V_PlateCarrier1_rgr",
-    "V_PlateCarrier2_rgr",
-    "V_TacVest_blk"
+    "bc036_invisible_carrier",
+    "bc036_invisible_tacvest",
+    "bc036_invisible_chestrig",
+    "bc036_invisible_combat",
+    "bc036_invisible_defender",
+    "bc036_invisible_protector"
 ];
 private _hvests = [
-    "V_PlateCarrierSpec_rgr",
-    "V_PlateCarrierGL_rgr"
+    "bc036_invisible_carrier_special",
+    "bc036_invisible_enhanced_combat",
+    "bc036_invisible_special_purpose"
 ];
-private _helmets = ["H_HelmetB", "H_HelmetB_light"];
-private _slHat   = ["H_HelmetSpecB"];
-private _sniHats = ["H_HelmetSpecB"];
+private _helmets = ["bc036_invisible_light_combat", "bc036_invisible_special_purpose"];
+private _slHat   = ["bc036_invisible_special_purpose", "bc036_invisible_enhanced_combat"];
+private _sniHats = ["bc036_invisible_assassin", "bc036_invisible_stealth_combat"];
 private _backpacks = ["B_AssaultPack_rgr", "B_FieldPack_ocamo", "B_Carryall_ocamo"];
 private _atBackpacks = ["B_Carryall_ocamo"];
 private _longRangeRadios = ["B_RadioBag_01_mtp_F"];
@@ -308,7 +312,7 @@ _eliteLoadoutData set ["vests", _hvests];
 _eliteLoadoutData set ["Hvests", _hvests];
 
 private _crewLoadoutData = _militaryLoadoutData call _fnc_copyLoadoutData;
-_crewLoadoutData set ["helmets", ["H_HelmetCrew_B", "H_PilotHelmetFighter_B", "H_PilotHelmetHeli_B", "H_CrewHelmetHeli_B"]];
+_crewLoadoutData set ["helmets", ["bc036_invisible_crew", "bc036_invisible_deckcrew", "bc036_invisible_heli_crew", "bc036_invisible_heli_pilot", "bc036_invisible_pilot"]];
 
 private _pilotLoadoutData = _crewLoadoutData call _fnc_copyLoadoutData;
 
