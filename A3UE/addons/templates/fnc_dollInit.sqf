@@ -366,15 +366,18 @@ GFL_fnc_swapPrimaryWeapon = {
     private _oldLoadout = getUnitLoadout _unit;
     private _primarySlot = _oldLoadout param [0, []];
     private _oldPrimary = primaryWeapon _unit;
-    private _oldPrimaryMags = _primarySlot param [4, []];
-    private _oldUbMags = _primarySlot param [5, []];
+    // getUnitLoadout primary slot stores mag as [class, count] (or []), not a flat list of class strings.
+    private _oldPrimaryMagSlot = _primarySlot param [4, []];
+    private _oldUbMagSlot = _primarySlot param [5, []];
+    private _oldPrimaryMagClass = if (_oldPrimaryMagSlot isEqualType [] && {count _oldPrimaryMagSlot > 0}) then { _oldPrimaryMagSlot # 0 } else { "" };
+    private _oldUbMagClass = if (_oldUbMagSlot isEqualType [] && {count _oldUbMagSlot > 0}) then { _oldUbMagSlot # 0 } else { "" };
     private _magInfo = magazinesAmmoFull _unit;
-    private _primaryMagCount = { (_x # 0) in _oldPrimaryMags } count _magInfo;
-    private _ubMagCount = { (_x # 0) in _oldUbMags } count _magInfo;
+    private _primaryMagCount = { (_x # 0) isEqualTo _oldPrimaryMagClass } count _magInfo;
+    private _ubMagCount = { (_x # 0) isEqualTo _oldUbMagClass } count _magInfo;
 
     {
-        _unit removeMagazines _x;
-    } forEach ((_oldPrimaryMags + _oldUbMags) arrayIntersect (_oldPrimaryMags + _oldUbMags));
+        if (_x != "") then { _unit removeMagazines _x };
+    } forEach [_oldPrimaryMagClass, _oldUbMagClass];
 
     if (_oldPrimary != "") then {
         _unit removeWeaponGlobal _oldPrimary;
@@ -481,24 +484,29 @@ GFL_fnc_tryResolveElmoUnit = {
     [_unit, _face, _uniform, _weaponClass, _fccPack] call GFL_fnc_isElmoResolved
 };
 
+GFL_fnc_isDollUnitStillResolved = {
+    params ["_unit"];
+    if !(_unit getVariable ["GFL_DollInitDone", false]) exitWith { false };
+    if ([_unit] call GFL_fnc_isElmoUnit) exitWith {
+        private _lockedKey = _unit getVariable ["GFL_ElmoProfileKey", ""];
+        if (_lockedKey isEqualTo "") exitWith {
+            // ELMO unit but no locked profile — happens for unsupported families (e.g. SG)
+            // that took the face/uniform fallback. Stay resolved as long as face/uniform still match.
+            [_unit] call GFL_fnc_isFaceUniformResolved
+        };
+        private _lockedProfile = GFL_ElmoProfileMap getOrDefault [_lockedKey, []];
+        if (_lockedProfile isEqualTo []) exitWith { false };
+        _lockedProfile params ["", "_face", "_uniform", "", "", "", "_fccPack"];
+        [_unit, _face, _uniform, primaryWeapon _unit, _fccPack] call GFL_fnc_isElmoResolved
+    };
+    [_unit] call GFL_fnc_isFaceUniformResolved
+};
+
 GFL_fnc_processDollUnit = {
     params ["_unit"];
     if (!alive _unit || isPlayer _unit || !local _unit) exitWith {};
-    if (_unit getVariable ["GFL_DollInitDone", false]) then {
-        if ([_unit] call GFL_fnc_isElmoUnit) then {
-            private _lockedKey = _unit getVariable ["GFL_ElmoProfileKey", ""];
-            if (_lockedKey != "") then {
-                private _lockedProfile = GFL_ElmoProfileMap getOrDefault [_lockedKey, []];
-                if !(_lockedProfile isEqualTo []) then {
-                    _lockedProfile params ["", "_face", "_uniform", "", "", "", "_fccPack"];
-                    if ([_unit, _face, _uniform, primaryWeapon _unit, _fccPack] call GFL_fnc_isElmoResolved) exitWith {};
-                };
-            };
-        } else {
-            if ([_unit] call GFL_fnc_isFaceUniformResolved) exitWith {};
-        };
-        _unit setVariable ["GFL_DollInitDone", false];
-    };
+    if ([_unit] call GFL_fnc_isDollUnitStillResolved) exitWith {};
+    _unit setVariable ["GFL_DollInitDone", false];
 
     if ([_unit] call GFL_fnc_isElmoUnit) exitWith {
         if ([_unit] call GFL_fnc_tryResolveElmoUnit) then {
@@ -508,8 +516,6 @@ GFL_fnc_processDollUnit = {
 
     if ([_unit] call GFL_fnc_applyFaceUniformFromCurrentFace) then {
         _unit setVariable ["GFL_DollInitDone", true];
-    } else {
-        _unit setVariable ["GFL_DollInitDone", false];
     };
 };
 
