@@ -258,13 +258,14 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
                 _arges setVariable ["COR_CoolantVolume", _initMax, true];
                 diag_log format ["[GFL Arges] Corvus override: frameArmor unchanged (%1), armorValues +1200, coolant %2", _base, _initMax];
             };
-            // Coolant maintenance: every tick.
-            // (1) Keep the cap at Arges floor so module absolute-value writes don't shrink it.
-            // (2) Arges IS the Corvus frame — she has no finite coolant tank.  Drain is blocked
-            //     so Corvus lasts until incoming damage forces COR_Shutdown, not a time limit.
+            // Coolant maintenance: every tick keep the CAP at Arges floor (so module
+            // absolute-value writes don't shrink it), but let the VOLUME drain naturally.
+            // Drain → fluid loss → COR_Shutdown via Corvus's normal mechanism, which we
+            // catch via the COR_Shutdown redirect below (Job 2) and hand control back to TDoll.
             private _targetMax = if (_arges getVariable ["COR_CoolCap+", false]) then { 9000 } else { 8000 };
-            _arges setVariable ["COR_MaxCoolant",    _targetMax, true];
-            _arges setVariable ["COR_CoolantVolume", _targetMax, true];
+            _arges setVariable ["COR_MaxCoolant", _targetMax, true];
+            // (removed: COR_CoolantVolume reset — coolant must be allowed to drain so
+            //  Corvus can shut down naturally and the redirect path triggers death.)
 
             // Heat maintenance: fn_heating.sqf runs every 0.5 s.  When COR_Heat >= 110 it
             // calls `_unit setDamage 1` directly — bypassing HandleDamage entirely.  This is

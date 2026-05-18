@@ -10,20 +10,22 @@
 
 params ["_unit", "_selection", "_damage", "_source", "_projectile", "_hitIndex", "_instigator", "_hitPoint"];
 
+// DIAGNOSTIC: unconditional — confirms XEH is actually invoking us and shows chain position.
+// _damage at entry tells us our position relative to ACE (priority=1):
+//   ≤ 0.9   → we ran AFTER ACE (our return value wins, correct)
+//   ≫ 1     → we ran BEFORE ACE (ACE will run after, ACE's return wins — bad)
+// Logs every fire including pass-through cases for raw Arges_F units (no GFL_ArgesState).
+private _n = (_unit getVariable ["GFL_DiagFilterCalls", 0]) + 1;
+_unit setVariable ["GFL_DiagFilterCalls", _n];
+diag_log format ["[GFL Diag] HD enter #%1: proj=%2 hp='%3' _damage=%4 curUnitDmg=%5 hitIdx=%6 state='%7' COR=%8",
+    _n, _projectile, _hitPoint, _damage, damage _unit, _hitIndex,
+    _unit getVariable ["GFL_ArgesState", "?"],
+    _unit getVariable ["COR_SysEnabled", "?"]
+];
+
 // Only operate on actively transformed Arges. If something else creates a raw
 // Arges_F unit, return engine damage unchanged.
 if (_unit getVariable ["GFL_ArgesState", "NONE"] != "ARGES") exitWith { _damage };
-
-// DIAGNOSTIC: count filter invocations and log Corvus-mode entries.
-// _damage at entry now tells us chain position relative to ACE:
-//   ≤ 0.9   → we ran AFTER ACE (correct, ACE's cap)
-//   ≫ 1     → we ran BEFORE ACE (would be bad, indicates priority mis-set)
-if (_unit getVariable ["COR_SysEnabled", false]) then {
-    private _n = (_unit getVariable ["GFL_DiagFilterCalls", 0]) + 1;
-    _unit setVariable ["GFL_DiagFilterCalls", _n];
-    diag_log format ["[GFL Diag] HD enter #%1: proj=%2 hp='%3' _damage=%4 curUnitDmg=%5 hitIdx=%6",
-        _n, _projectile, _hitPoint, _damage, damage _unit, _hitIndex];
-};
 
 // Re-entrancy guard: when we call setDamage 1 ourselves, let it through so Arges actually dies
 if (_unit getVariable ["GFL_ArgesKilling", false])       exitWith { _damage };
