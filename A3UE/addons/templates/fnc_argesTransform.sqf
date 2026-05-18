@@ -192,13 +192,24 @@ if (!isNil "theBoss" && { _player == theBoss } && { !isNil "A3A_fnc_theBossTrans
         if (_arges getVariable ["GFL_ArgesKilling", false]) exitWith {};
         if (_arges getVariable ["GFL_ArgesFainting", false]) exitWith {};
 
+        // Re-enforce allowDamage state every 0.25 s (in addition to the 1 s PFH).
+        // Some external script (TacGirls hitboxinit, ACE Medical setUnconscious, etc.) may
+        // flip allowDamage; this catches it within 250 ms instead of 1 s.
+        private _corOn = _arges getVariable ["COR_SysEnabled", false];
+        private _wantAllow = _corOn;  // true only when Corvus is active
+        private _curAllow = isDamageAllowed _arges;
+        if (_curAllow != _wantAllow) then {
+            _arges allowDamage _wantAllow;
+            diag_log format ["[GFL Diag] allowDamage flipped to %1 (was %2, COR=%3)", _wantAllow, _curAllow, _corOn];
+        };
+
         private _slipped = damage _arges;
         private _filterCalls = _arges getVariable ["GFL_DiagFilterCalls", 0];
         _arges setVariable ["GFL_DiagFilterCalls", 0];
         if (_slipped > 0) then {
             _arges setDamage 0;
             if (!isNil "ace_medical_fnc_fullHeal") then { _arges call ace_medical_fnc_fullHeal; };
-            private _mode = if (_arges getVariable ["COR_SysEnabled", false]) then { "Corvus" } else { "non-Corvus" };
+            private _mode = if (_corOn) then { "Corvus" } else { "non-Corvus" };
             diag_log format ["[GFL Arges] %1 slip-through suppressed: dmg was %2 (filterCalls=%3)", _mode, _slipped, _filterCalls];
         } else {
             if (_filterCalls > 0) then {
