@@ -58,14 +58,15 @@ class cfgFunctions {
 //  unit chain. HandleDamage is now registered via direct addEventHandler in
 //  fnc_argesTransform.sqf — guaranteed to fire on whichever machine has unit locality.)
 
-// Prevent ACE cardiac arrest on Arges_F units (Branch 2: ACE present, Corvus inactive).
-// Override the base wound handler key so ours runs in its place — avoids non-deterministic
-// config key iteration order. For Arges: fullHeal + resize 0. For all others: delegate to
-// the real ace_medical_damage_fnc_woundsHandlerBase function.
+// Wound handler hook for non-Corvus transformed Arges only.
+// Registered as a NEW key (additive) rather than replacing ace_medical_damage_woundsHandlerBase.
+// This leaves ACE's normal wound pipeline and Corvus's COR_Damage handler completely
+// untouched — wounds for all other units (including Corvus-active ones) process exactly
+// as ACE/Corvus intend. Our handler only does extra work for the narrow Arges case.
 class ACE_Medical_Injuries {
     class damageTypes {
         class woundHandlers {
-            ace_medical_damage_woundsHandlerBase = "GFL_fnc_argesWoundHandler";
+            GFL_Arges_Wound = "GFL_fnc_argesWoundHandler";
         };
     };
 };
