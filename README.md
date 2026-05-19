@@ -25,10 +25,12 @@ This mod gives GFL-themed factions (occupant, invader, rebel, rival) into Antist
 
 | Mod | Steam Workshop | Effect |
 |-----|---------------|--------|
+| Ace3 | [463939057](https://steamcommunity.com/workshop/filedetails/?id=463939057) | Pre-req for Corvus, small support for Arges mode damage handler |
 | NeuralCloud- C.O.R.V.U.S Systems [GFL / GFL2] | [3672434840](https://steamcommunity.com/sharedfiles/filedetails/?id=3672434840) | Enables Corvus System "feel" for AI units |
 | EG Mecha / KCCO Mech Hydra | [3718158909](https://steamcommunity.com/sharedfiles/filedetails/?id=3718158909) | Enables four-legged mech units for GnK |
 | Sci-Fi Vehicles Pack | [3539476763](https://steamcommunity.com/sharedfiles/filedetails/?id=3539476763) | Enables Bearcat IFV family for GnK and Elmo Faction |
 | Sci-FI Turrets Pack  | [3712115907](https://steamcommunity.com/sharedfiles/filedetails/?id=3712115907) | Enables Sci-Fi turret pack  |
+
 
 ---
 
@@ -57,10 +59,6 @@ The girls which were added by Utage's TacGirls will be spawned by antistasi, and
 
 TacGirls adds several special units, added support scripts to transform player to Arges_F (UNRC robot). The Stats are not exactly the same as TacGirls Arges and have to do a bit workaround for the feel. Able to revert to normal unit through a scroll selector, with saved prior inventory and outfit. all authority (Squad Lead, HC Commander) is transferred to Arges body or vice versa when reverting, but zeus auth is not transferred to arges (if you revert, zeus auth is on your original body. just use create zeus tbh).
 
-### Integrated Arms Dealer
-
-TacGirls special weapons and vehicles are purchasable through Antistasi Ultimate's trader system without any additional mission setup.
-
 ### Optional Support
 
 Support NeuralCloud- C.O.R.V.U.S Systems, If AI unit wear FCC there is a server script that will give them similar buff (its actually a workaround) to activated corvus system on player. Elmo faction also have such buff but a nerfed x0.3 (you don't want to be swarmed by such walking tanks) Arges Transformation is also buffed.
@@ -69,11 +67,11 @@ Support NeuralCloud- C.O.R.V.U.S Systems, If AI unit wear FCC there is a server 
 
 some objects of Sci-Fi Vehicles pack and Sci-Fi Turret pack are automatically added to GnK's vehicle/static pool when the corresponding mods are detected at load time.
 
-###Addon setting
+### Addon setting
 
 some feature able to be toggled on and off, because it might be heavy for server/client (e.g. the face-outfit matcher or transform into arges if you don't want it). oh right you can change petros to shikikan be it in his face or his name. No Gentianne.
 
-###Planned Content
+### Planned Content
 - Signing file for multiplayer
 - flags for other faction (I am a bit lazy)
 - Logos or icons for stuff that needed it (I am lazy)
@@ -82,9 +80,9 @@ some feature able to be toggled on and off, because it might be heavy for server
 
 ### Installation
 
-A) Github release
-Download the release and extract, place it whereverer you like. Open Arma3 launcher add local mod, add the directory you save the folder.
-B) Steam Workshop Release (when it exist)
+A) Github release\
+Download the release and extract, place it whereverer you like. Open Arma3 launcher add local mod, add the directory you save the folder.\
+B) Steam Workshop Release (when it exist).\
 click subscribe and activate it on your launcher.
 
 ## Building
