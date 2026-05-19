@@ -25,10 +25,12 @@ This mod gives GFL-themed factions (occupant, invader, rebel, rival) into Antist
 
 | Mod | Steam Workshop | Effect |
 |-----|---------------|--------|
+| Ace3 | [463939057](https://steamcommunity.com/workshop/filedetails/?id=463939057) | Pre-req for Corvus, small support for Arges mode damage handler |
 | NeuralCloud- C.O.R.V.U.S Systems [GFL / GFL2] | [3672434840](https://steamcommunity.com/sharedfiles/filedetails/?id=3672434840) | Enables Corvus System "feel" for AI units |
 | EG Mecha / KCCO Mech Hydra | [3718158909](https://steamcommunity.com/sharedfiles/filedetails/?id=3718158909) | Enables four-legged mech units for GnK |
 | Sci-Fi Vehicles Pack | [3539476763](https://steamcommunity.com/sharedfiles/filedetails/?id=3539476763) | Enables Bearcat IFV family for GnK and Elmo Faction |
 | Sci-FI Turrets Pack  | [3712115907](https://steamcommunity.com/sharedfiles/filedetails/?id=3712115907) | Enables Sci-Fi turret pack  |
+
 
 ---
 
