@@ -1,6 +1,10 @@
 # Inspection / reference folders (decompiled third-party PBOs, not part of build)
 _inspect_*/
 
+# Tutorial docs and example templates (not part of the mod, for reference only)
+_docs/
+#Examples/
+
 # Build output
 build/
 
@@ -11,9 +15,6 @@ build/
 .idea/
 *.iml
 .vscode/
-
-# Claude Code
-.claude/
 
 # Image source files (keep .paa, ignore raw sources)
 *.png
