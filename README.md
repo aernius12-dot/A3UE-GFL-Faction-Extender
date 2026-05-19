@@ -69,11 +69,11 @@ Support NeuralCloud- C.O.R.V.U.S Systems, If AI unit wear FCC there is a server 
 
 some objects of Sci-Fi Vehicles pack and Sci-Fi Turret pack are automatically added to GnK's vehicle/static pool when the corresponding mods are detected at load time.
 
-###Addon setting
+### Addon setting
 
 some feature able to be toggled on and off, because it might be heavy for server/client (e.g. the face-outfit matcher or transform into arges if you don't want it). oh right you can change petros to shikikan be it in his face or his name. No Gentianne.
 
-###Planned Content
+### Planned Content
 - Signing file for multiplayer
 - flags for other faction (I am a bit lazy)
 - Logos or icons for stuff that needed it (I am lazy)
