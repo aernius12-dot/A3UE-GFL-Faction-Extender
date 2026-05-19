@@ -57,10 +57,6 @@ The girls which were added by Utage's TacGirls will be spawned by antistasi, and
 
 TacGirls adds several special units, added support scripts to transform player to Arges_F (UNRC robot). The Stats are not exactly the same as TacGirls Arges and have to do a bit workaround for the feel. Able to revert to normal unit through a scroll selector, with saved prior inventory and outfit. all authority (Squad Lead, HC Commander) is transferred to Arges body or vice versa when reverting, but zeus auth is not transferred to arges (if you revert, zeus auth is on your original body. just use create zeus tbh).
 
-### Integrated Arms Dealer
-
-TacGirls special weapons and vehicles are purchasable through Antistasi Ultimate's trader system without any additional mission setup.
-
 ### Optional Support
 
 Support NeuralCloud- C.O.R.V.U.S Systems, If AI unit wear FCC there is a server script that will give them similar buff (its actually a workaround) to activated corvus system on player. Elmo faction also have such buff but a nerfed x0.3 (you don't want to be swarmed by such walking tanks) Arges Transformation is also buffed.
