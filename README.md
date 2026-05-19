@@ -78,10 +78,10 @@ some feature able to be toggled on and off, because it might be heavy for server
 
 ### Installation
 
-A) Github release
-Download the release and extract, place it whereverer you like. Open Arma3 launcher add local mod, add the directory you save the folder.
-B) Steam Workshop Release (when it exist)
-click subscribe and activate it on your launcher.
+A) Github release\
+Download the release and extract, place it whereverer you like. Open Arma3 launcher add local mod, add the directory you save the folder.\
+B) Steam Workshop Release (when it exist).\
+click subscribe and activate it on your launcher.\
 
 ## Building
 
