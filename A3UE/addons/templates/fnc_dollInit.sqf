@@ -28,12 +28,14 @@ GFL_DollResolveLastLogged = 0;
 GFL_AegisExcludedBases = ["Arges_F", "Aegis_F", "Aegis_SWAP_F", "Steropes_F"];
 
 GFL_fnc_isAegisUnit = {
+    // Deliberately avoids exitWith-inside-forEach (SQF scope trap where the
+    // exitWith code block may not modify the outer _hit). Plain || chain is
+    // unambiguous and compiles down to the same short-circuit evaluation.
     params ["_unit"];
-    private _hit = false;
-    {
-        if (_unit isKindOf _x) exitWith { _hit = true };
-    } forEach GFL_AegisExcludedBases;
-    _hit
+    (_unit isKindOf "Arges_F") ||
+    (_unit isKindOf "Aegis_F") ||
+    (_unit isKindOf "Aegis_SWAP_F") ||
+    (_unit isKindOf "Steropes_F")
 };
 
 // ---------- Faction-aware gate ----------
@@ -340,6 +342,9 @@ GFL_fnc_applyFaceUniform = {
 
 GFL_fnc_applyFaceUniformFromCurrentFace = {
     params ["_unit"];
+    // Secondary Aegis guard — defence-in-depth in case processDollUnit's gate is
+    // bypassed. removeUniform on an Aegis body would strip the integrated gun mesh.
+    if ([_unit] call GFL_fnc_isAegisUnit) exitWith { false };
     private _targetUniform = GFL_FaceUniformMap getOrDefault [toLower (face _unit), ""];
     if (_targetUniform isEqualTo "") exitWith { false };
     [_unit, _targetUniform] call GFL_fnc_applyFaceUniform;
@@ -508,6 +513,11 @@ GFL_fnc_isElmoUnit = {
 GFL_fnc_assignFccPackForFace = {
     params ["_unit"];
     if (!alive _unit || !local _unit) exitWith {};
+    // Secondary Aegis guard — setUnitLoadout (via assignFccBackpack) captures a
+    // getUnitLoadout snapshot that may not yet include TacGirls' deferred weapon
+    // assignment. Calling setUnitLoadout on an Aegis unit can therefore freeze a
+    // weapon-less loadout and permanently strip AegisGun/Steropes weapon.
+    if ([_unit] call GFL_fnc_isAegisUnit) exitWith {};
     if !(isClass (configFile >> "CfgVehicles" >> "TDoll_B_Pack")) exitWith {};
 
     private _faceKey = toLower (face _unit);
