@@ -42,10 +42,15 @@ if (isNil "COR_AArmor") then { missionNamespace setVariable ["COR_AArmor", true]
 GFL_fnc_corvusInitUnit = {
     params ["_unit", "_fccPacks"];
     if (!local _unit) exitWith {};
-    // Arges_F is a player-controlled unit. Player activates Corvus manually via ACE self-action.
-    // Auto-init here would set COR_SysEnabled without COR_fnc_SysInit's tight allowDamage PFH,
-    // which would conflict with our faint mechanism. Skip and let the player choose.
-    if (typeOf _unit == "Arges_F") exitWith {};
+    // Aegis-family units (Arges_F, Aegis_F, Aegis_SWAP_F, Steropes_F) are TacGirls
+    // heavy-combat frames. Their canonical weapon is baked into the body model and
+    // assigned by TacGirls config — Corvus PFH init must not run on them.
+    // Using inline isKindOf chain (no forEach/exitWith scope trap) to catch all
+    // subclasses. Arges_F specifically is also player-controlled; activating
+    // COR_SysEnabled without COR_fnc_SysInit's tight allowDamage PFH would conflict
+    // with the player faint mechanism, so all Aegis family is skipped here.
+    if (_unit isKindOf "Arges_F" || _unit isKindOf "Aegis_F" ||
+        _unit isKindOf "Aegis_SWAP_F" || _unit isKindOf "Steropes_F") exitWith {};
     if (!(backpack _unit in _fccPacks)) exitWith {};
     if (_unit getVariable ["GFL_COR_InitDone", false]) exitWith {};
 
