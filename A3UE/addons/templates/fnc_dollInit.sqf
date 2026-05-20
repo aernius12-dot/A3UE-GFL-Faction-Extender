@@ -590,10 +590,23 @@ GFL_fnc_processDollUnit = {
     params ["_unit"];
     if (!alive _unit || isPlayer _unit || !local _unit) exitWith {};
     // Player-transformed Arges (and the matching stashed TDoll) carry GFL_ArgesState ==
-    // "ARGES". Neither the matcher nor the Aegis-weapon override should touch them — the
+    // "ARGES". Neither the matcher nor any uniform/face override should touch them — the
     // transform script (fnc_argesTransform.sqf) hand-grafts the player's full loadout
     // onto the new body, and we must preserve it.
     if (_unit getVariable ["GFL_ArgesState", "NONE"] != "NONE") exitWith {};
+
+    // ABSOLUTE GATE: if no GFL faction is active for this unit's side, none of our
+    // matcher / fallback / Aegis-exclusion logic runs. This makes the guarantee simple:
+    //
+    //   "Playing FIA rebel vs US Army? Neither side has a GFL_* faction template
+    //    selected. processDollUnit exits here. Zero further code paths execute."
+    //
+    // Without this top-level gate the matcher main branch was already faction-gated
+    // (via isElmoUnit), but the applyFaceUniformFromCurrentFace fallback path could
+    // still inspect a unit's face on west/east when no GFL faction was active.
+    // Vanilla US Army faces aren't in our map so nothing would happen in practice —
+    // but "happens to be safe by miss" is not a guarantee. This is.
+    if (!([side group _unit] call GFL_fnc_isGFLFactionForSide)) exitWith {};
 
     // Aegis-family units (Arges_F / Aegis_F / Aegis_SWAP_F / Steropes_F + subclasses):
     // hard exclusion. TacGirls config gives them their canonical weapon + body model at
@@ -612,12 +625,9 @@ GFL_fnc_processDollUnit = {
         };
     };
 
-    // Resistance / civilian fallback path (used by GnK rebels): only run when the unit's
-    // side has a GFL faction active. Without this, FIA-or-similar rebels paired with an
-    // ELMO occupant would get their faces touched.
-    private _side = side group _unit;
-    if (_side in [resistance, civilian] && {!([_side] call GFL_fnc_isGFLFactionForSide)}) exitWith {};
-
+    // Fallback path (used by GnK rebels). The absolute gate above already guaranteed a
+    // GFL faction is active for this side, so the fallback is only ever called when we
+    // actually want it to run.
     if ([_unit] call GFL_fnc_applyFaceUniformFromCurrentFace) then {
         _unit setVariable ["GFL_DollInitDone", true];
     };
