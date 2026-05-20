@@ -11,30 +11,21 @@ diag_log "[GFL DollInit] registering face/uniform and ELMO weapon resolver";
 GFL_DollResolveCount = 0;
 GFL_DollResolveLastLogged = 0;
 
-// ---------- Aegis-family exclusion ----------
+// ---------- Aegis-family exclusion (pure no-op) ----------
 // Arges_F / Aegis_F / Aegis_SWAP_F / Steropes_F are bespoke heavy-combat T-Doll frames in
-// TacGirls. They must NEVER go through the face/outfit/weapon matcher — their identity is
-// hardcoded by the unit class itself, and Antistasi's random loadout assignment leaves
-// them holding the wrong weapon (e.g. an RHS rifle on Arges_F). For these units we skip
-// the matcher and force the canonical Aegis weapon.
+// TacGirls. Each one has its canonical weapon (argesGun / aegisGun / aegisswapGun /
+// steropesGun) pre-assigned by CfgVehicles + EventHandlers.init at spawn — TacGirls
+// handles arming them, not us.
 //
-// EXCEPTION: when the player transforms TO Arges_F via GFL_fnc_argesTransform, the
-// resulting unit gets GFL_ArgesState = "ARGES" set immediately and inherits the player's
-// existing primary weapon. We must not overwrite that loadout. forceAegisWeapon bails on
-// any unit tagged "ARGES" so the player keeps what they were holding pre-transform.
+// The bug we're fixing: applyFaceUniformFromCurrentFace was looking up the unit's face
+// in GFL_FaceUniformMap and swapping the uniform to a regular T-Doll uniform when the
+// face matched (e.g. an Arges_F that happened to spawn with "alvaface" would have its
+// body model replaced by alva_uniform). That stripped the Arges silhouette AND the
+// weapon along with it (the TacGirls character-uniform model carries the gun mesh).
+//
+// Fix: when we detect an Aegis-family unit, mark it done and exit immediately. No
+// weapon override, no face/uniform change. Whatever TacGirls config gave it stays.
 GFL_AegisExcludedBases = ["Arges_F", "Aegis_F", "Aegis_SWAP_F", "Steropes_F"];
-
-// Map base class -> canonical-weapon fallback chain. Some weapon classes (argesGun,
-// steropesGun) may not be defined as standalone CfgWeapons entries in every TacGirls
-// version, so we list a chain and pick the first one that actually exists. aegisGun /
-// aegisswapGun are the safe lowest-common-denominator fallbacks. isKindOf walks the
-// inheritance chain, so a subclass of any of these picks up the parent's chain.
-GFL_AegisWeaponMap = createHashMapFromArray [
-    ["Arges_F",      ["argesGun",     "aegisGun"]],
-    ["Aegis_F",      ["aegisGun"]],
-    ["Aegis_SWAP_F", ["aegisswapGun", "aegisGun"]],
-    ["Steropes_F",   ["steropesGun",  "aegisGun"]]
-];
 
 GFL_fnc_isAegisUnit = {
     params ["_unit"];
@@ -43,54 +34,6 @@ GFL_fnc_isAegisUnit = {
         if (_unit isKindOf _x) exitWith { _hit = true };
     } forEach GFL_AegisExcludedBases;
     _hit
-};
-
-GFL_fnc_forceAegisWeapon = {
-    params ["_unit"];
-    if (!alive _unit || !local _unit) exitWith {};
-    if (isPlayer _unit) exitWith {};
-    // Skip player-transformed Arges (and the stashed TDoll, which carries the same tag).
-    // The transform script in fnc_argesTransform.sqf hand-grafts the player's loadout onto
-    // the new Arges_F — overwriting that here would strip whatever weapon the player was
-    // carrying pre-transform.
-    if (_unit getVariable ["GFL_ArgesState", "NONE"] != "NONE") exitWith {};
-    if (_unit getVariable ["GFL_AegisWeaponDone", false]) exitWith {};
-
-    // Resolve the weapon-fallback chain for this unit's base class.
-    private _chain = [];
-    {
-        if (_unit isKindOf _x) exitWith {
-            _chain = GFL_AegisWeaponMap getOrDefault [_x, []];
-        };
-    } forEach GFL_AegisExcludedBases;
-    if (_chain isEqualTo []) exitWith {};
-
-    private _weapon = "";
-    {
-        if (isClass (configFile >> "CfgWeapons" >> _x)) exitWith { _weapon = _x };
-    } forEach _chain;
-    if (_weapon isEqualTo "") exitWith {
-        diag_log format ["[GFL DollInit] Aegis weapon chain %1 — no class exists in CfgWeapons; unit %2 kept default loadout", _chain, _unit];
-    };
-
-    private _current = primaryWeapon _unit;
-    if (_current isEqualTo _weapon) exitWith {
-        _unit setVariable ["GFL_AegisWeaponDone", true, true];
-    };
-
-    if (_current != "") then { _unit removeWeaponGlobal _current };
-    _unit addWeaponGlobal _weapon;
-
-    // Stock with the weapon's default magazine.
-    private _mags = getArray (configFile >> "CfgWeapons" >> _weapon >> "magazines");
-    if !(_mags isEqualTo []) then {
-        private _mag = _mags # 0;
-        _unit addPrimaryWeaponItem _mag;
-        for "_i" from 1 to 6 do { _unit addMagazine _mag };
-    };
-
-    _unit setVariable ["GFL_AegisWeaponDone", true, true];
-    diag_log format ["[GFL DollInit] Aegis weapon forced unit=%1 type=%2 weapon=%3", _unit, typeOf _unit, _weapon];
 };
 
 // ---------- Faction-aware gate ----------
@@ -653,10 +596,10 @@ GFL_fnc_processDollUnit = {
     if (_unit getVariable ["GFL_ArgesState", "NONE"] != "NONE") exitWith {};
 
     // Aegis-family units (Arges_F / Aegis_F / Aegis_SWAP_F / Steropes_F + subclasses):
-    // skip the matcher entirely, just force the canonical Aegis weapon. Their identity
-    // is the unit class itself — face/uniform must not be touched.
+    // hard exclusion. TacGirls config gives them their canonical weapon + body model at
+    // spawn; any touch from us (forceAddUniform on a face match, weapon swap, ...) would
+    // strip the Arges silhouette and the gun mesh it carries. Mark done and bail.
     if ([_unit] call GFL_fnc_isAegisUnit) exitWith {
-        [_unit] call GFL_fnc_forceAegisWeapon;
         _unit setVariable ["GFL_DollInitDone", true];
     };
 
