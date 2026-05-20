@@ -22,11 +22,11 @@ private _fccPacks = ["TDoll_B_Pack", "TDoll_V_Pack", "TDoll_Sup_Pack", "TDoll_Se
 // the full frameArmor from the backpack config; west/east AI (ELMO, Sangvis, Mangi,
 // Varjagers, Paradeus) get reduced values so they're not bullet sponges.
 GFL_CorvusHostileArmor = createHashMapFromArray [
-    ["TDoll_Bul_Pack",  130],
-    ["TDoll_Sent_Pack",  90],
-    ["TDoll_Sup_Pack",   60],
-    ["TDoll_V_Pack",     60],
-    ["TDoll_B_Pack",     40]
+    ["TDoll_Bul_Pack",   50],
+    ["TDoll_Sent_Pack",  34],
+    ["TDoll_Sup_Pack",   22],
+    ["TDoll_V_Pack",     22],
+    ["TDoll_B_Pack",     15]
 ];
 
 // Guarantee the caliber gate is active on the server regardless of CBA settings propagation.
