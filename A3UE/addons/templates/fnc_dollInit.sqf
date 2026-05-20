@@ -498,6 +498,31 @@ GFL_fnc_isElmoUnit = {
     (toLower (face _unit) in GFL_ElmoFaceKeys) || (uniform _unit in GFL_ElmoUniforms)
 };
 
+// Assign the FCC backpack matching the doll-profile of the unit's CURRENT face. Works
+// independently of the face/outfit matcher — if the matcher already changed the face,
+// we read the new face; if it didn't, we read the random Antistasi face. Either way the
+// FCC pack matches whatever doll identity the unit is currently presenting.
+//
+// Falls back to TDoll_B_Pack when the unit's face has no profile entry (e.g. aglteamface,
+// commandermaleface) — still produces a "Corvus loadout" even for the helper-only faces.
+GFL_fnc_assignFccPackForFace = {
+    params ["_unit"];
+    if (!alive _unit || !local _unit) exitWith {};
+    if !(isClass (configFile >> "CfgVehicles" >> "TDoll_B_Pack")) exitWith {};
+
+    private _faceKey = toLower (face _unit);
+    private _profile = GFL_ElmoProfileMap getOrDefault [_faceKey, []];
+    private _fccPack = if (_profile isEqualTo []) then {
+        "TDoll_B_Pack"  // unknown face -> base FCC pack
+    } else {
+        _profile param [6, "TDoll_B_Pack"]
+    };
+    if (_fccPack isEqualTo "") exitWith {};
+    if !(isClass (configFile >> "CfgVehicles" >> _fccPack)) exitWith {};
+
+    [_unit, _fccPack] call GFL_fnc_assignFccBackpack;
+};
+
 // Class-first / face-preserving resolution:
 //   1. Detect unit's Antistasi class (Rifleman, Marksman, Medic, etc.).
 //   2. Look up the families that class is allowed to use (per user spec).
@@ -505,11 +530,13 @@ GFL_fnc_isElmoUnit = {
 //      keep the face and just match outfit + weapon to it.
 //   4. Otherwise pick a random face from the allowed-family profile pool, and apply
 //      that face + outfit + weapon instead.
-//   5. Either way, assign the FCC backpack matching the picked profile's role last.
+// FCC backpack assignment used to live as step 5; it is now a separate concern handled
+// by GFL_fnc_assignFccPackForFace under its own GFL_CorvusLoadout_* toggle.
 GFL_fnc_tryResolveElmoUnit = {
     params ["_unit"];
     if !([_unit] call GFL_fnc_isElmoUnit) exitWith { false };
-    if !(missionNamespace getVariable ["GFL_DollMatchHostileAI", true]) exitWith { false };
+    // Gating moved to processDollUnit (GFL_MatchFaceOutfit_Hostile) so the same function
+    // can be called from any branch without re-checking the toggle here.
 
     private _class = [_unit] call GFL_fnc_getUnitClass;
     private _allowed = [_class] call GFL_fnc_getAllowedFamiliesForClass;
@@ -549,12 +576,10 @@ GFL_fnc_tryResolveElmoUnit = {
         };
     };
 
-    // Step 5: Corvus / FCC backpack last, matching the picked doll's GFL2 role.
-    if (isClass (configFile >> "CfgVehicles" >> "TDoll_B_Pack")) then {
-        [_unit, _fccPack] call GFL_fnc_assignFccBackpack;
-    };
+    // FCC backpack assignment is gated separately now (GFL_CorvusLoadout_Hostile) and
+    // handled at the processDollUnit level via GFL_fnc_assignFccPackForFace.
 
-    // Re-apply face/uniform after weapon/backpack edits — late loadout churn from other systems
+    // Re-apply face/uniform after weapon edits — late loadout churn from other systems
     // has to fight a stable target.
     [_unit, _uniform, _face] call GFL_fnc_applyFaceUniform;
 
@@ -619,18 +644,39 @@ GFL_fnc_processDollUnit = {
     if ([_unit] call GFL_fnc_isDollUnitStillResolved) exitWith {};
     _unit setVariable ["GFL_DollInitDone", false];
 
+    // ---------- Hostile branch ----------
+    // ELMO / Paradeus / Sangvis / Mangi / Varjagers AI units. The face-outfit-weapon
+    // matcher and the Corvus-loadout (FCC backpack) toggles are independent: each may
+    // be on or off, and each fires its sub-action against whatever face the unit ends
+    // up presenting (matched or original).
     if ([_unit] call GFL_fnc_isElmoUnit) exitWith {
-        if ([_unit] call GFL_fnc_tryResolveElmoUnit) then {
-            _unit setVariable ["GFL_DollInitDone", true];
-        };
-    };
+        private _matchOn   = missionNamespace getVariable ["GFL_MatchFaceOutfit_Hostile", true];
+        private _loadoutOn = missionNamespace getVariable ["GFL_CorvusLoadout_Hostile",   true];
 
-    // Fallback path (used by GnK rebels). The absolute gate above already guaranteed a
-    // GFL faction is active for this side, so the fallback is only ever called when we
-    // actually want it to run.
-    if ([_unit] call GFL_fnc_applyFaceUniformFromCurrentFace) then {
+        if (_matchOn) then {
+            [_unit] call GFL_fnc_tryResolveElmoUnit;
+        };
+        if (_loadoutOn) then {
+            [_unit] call GFL_fnc_assignFccPackForFace;
+        };
         _unit setVariable ["GFL_DollInitDone", true];
     };
+
+    // ---------- Rebel / civilian branch (GnK + helper-face units) ----------
+    // The absolute gate above already guaranteed a GFL faction is active for this side.
+    // The face-outfit matcher here is the simpler face -> uniform lookup (no class /
+    // weapon resolution, since the rebel path doesn't have an Antistasi role to anchor
+    // weapon family). FCC backpack assignment is the same helper as the hostile side.
+    private _matchOn   = missionNamespace getVariable ["GFL_MatchFaceOutfit_GnK", true];
+    private _loadoutOn = missionNamespace getVariable ["GFL_CorvusLoadout_GnK",   true];
+
+    if (_matchOn) then {
+        [_unit] call GFL_fnc_applyFaceUniformFromCurrentFace;
+    };
+    if (_loadoutOn) then {
+        [_unit] call GFL_fnc_assignFccPackForFace;
+    };
+    _unit setVariable ["GFL_DollInitDone", true];
 };
 
 call GFL_fnc_buildWeaponCatalog;
