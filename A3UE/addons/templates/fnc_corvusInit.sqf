@@ -49,9 +49,15 @@ GFL_fnc_corvusInitUnit = {
     if (!(backpack _unit in _fccPacks)) exitWith {};
     if (_unit getVariable ["GFL_COR_InitDone", false]) exitWith {};
 
-    // Toggle: skip buff entirely for hostile (west/east) AI when disabled. Rebels always get it.
+    // Per-side buff toggle: GFL_CorvusBuff_Hostile for west/east units, GFL_CorvusBuff_GnK
+    // for any other side (resistance / civilian) that ends up here with an FCC pack equipped.
     private _isHostile = (side group _unit) in [west, east];
-    if (_isHostile && {!(missionNamespace getVariable ["GFL_CorvusBuffHostileAI", true])}) exitWith {};
+    private _buffOn = if (_isHostile) then {
+        missionNamespace getVariable ["GFL_CorvusBuff_Hostile", true]
+    } else {
+        missionNamespace getVariable ["GFL_CorvusBuff_GnK", true]
+    };
+    if (!_buffOn) exitWith {};
 
     _unit setVariable ["GFL_COR_InitDone", true, true];
 

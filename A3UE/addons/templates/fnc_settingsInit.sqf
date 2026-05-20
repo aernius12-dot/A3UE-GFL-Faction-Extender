@@ -30,34 +30,102 @@ Info("settingsInit started — registering GFL Antistasi addon settings");
     }
 ] call CBA_fnc_addSetting;
 
-// Whether the Corvus init script applies armor/buffs to hostile AI units (ELMO etc.).
-// When off, hostile ELMO units still get FCC backpacks but no COR_SysEnabled / buff PFH —
-// so they fight as plain Antistasi infantry. Rebel units (GnK / Petros) are unaffected.
+// ---------------- Doll resolver toggles (per side, per concern) ----------------
+//
+// Three independent concerns, each split between GnK rebel side and hostile-AI side:
+//
+//   Face / Outfit / Weapon matcher
+//     -> Reads the unit's face, picks the canonical doll profile, then applies the
+//        matching face + uniform body model + canonical weapon family.
+//
+//   Corvus loadout (FCC backpack)
+//     -> Independent of the matcher. Looks up the unit's current face in the doll
+//        profile map, and assigns the FCC backpack that matches the doll's canonical
+//        role (Sentinel -> Sent_Pack, Bulwark -> Bul_Pack, Support -> Sup_Pack, ...).
+//
+//   Corvus buff (armor + PFH)
+//     -> The actual COR_SysEnabled init that gives the unit armor/coolant/stamina/
+//        recoil-coefficient buffs. Reads the FCC backpack the unit is wearing.
+//
+// All six default to true (preserving current behavior). Toggling them off
+// individually lets you e.g. "match face + outfit + weapon on hostile, but no FCC
+// backpack, and no buff" — or any other combination.
+
 [
-    "GFL_CorvusBuffHostileAI",
+    "GFL_MatchFaceOutfit_GnK",
     "CHECKBOX",
-    ["Corvus AI Buff (Hostile)", "Apply Corvus armor/buffs to hostile AI (ELMO etc.). Rebels always get the full buff."],
+    ["GnK Rebel: Match Face / Outfit / Weapon", "Run the doll resolver on GnK rebel units (face -> uniform body model + canonical weapon family). When off, GnK rebels keep whatever random face/uniform Antistasi assigned."],
     "GFL Antistasi",
     [true],
     1,
     {
         params ["_value"];
-        diag_log format ["[GFL Settings] GFL_CorvusBuffHostileAI changed to %1", _value];
+        diag_log format ["[GFL Settings] GFL_MatchFaceOutfit_GnK changed to %1", _value];
     }
 ] call CBA_fnc_addSetting;
 
-// Whether the ELMO doll resolver matches face/outfit/weapon on hostile AI units.
-// When off, hostile ELMO units keep whatever random face + random weapon Antistasi assigned.
 [
-    "GFL_DollMatchHostileAI",
+    "GFL_MatchFaceOutfit_Hostile",
     "CHECKBOX",
-    ["Match Face/Outfit/Weapon (Hostile)", "Run the class-first doll resolver on hostile AI (ELMO etc.). Disable to keep Antistasi's random kit."],
+    ["Hostile Force: Match Face / Outfit / Weapon", "Run the doll resolver on hostile AI (ELMO, Paradeus, Sangvis, ...). When off, hostile units keep whatever random kit Antistasi assigned."],
     "GFL Antistasi",
     [true],
     1,
     {
         params ["_value"];
-        diag_log format ["[GFL Settings] GFL_DollMatchHostileAI changed to %1", _value];
+        diag_log format ["[GFL Settings] GFL_MatchFaceOutfit_Hostile changed to %1", _value];
+    }
+] call CBA_fnc_addSetting;
+
+[
+    "GFL_CorvusLoadout_GnK",
+    "CHECKBOX",
+    ["GnK Rebel: Corvus Loadout (FCC Backpack)", "Assign each GnK rebel the FCC backpack that matches their doll's canonical role (Sentinel/Bulwark/Support/Vanguard/Base)."],
+    "GFL Antistasi",
+    [true],
+    1,
+    {
+        params ["_value"];
+        diag_log format ["[GFL Settings] GFL_CorvusLoadout_GnK changed to %1", _value];
+    }
+] call CBA_fnc_addSetting;
+
+[
+    "GFL_CorvusLoadout_Hostile",
+    "CHECKBOX",
+    ["Hostile Force: Corvus Loadout (FCC Backpack)", "Assign each hostile AI doll the FCC backpack matching their canonical role. Without the backpack the Corvus buff init won't fire on them either."],
+    "GFL Antistasi",
+    [true],
+    1,
+    {
+        params ["_value"];
+        diag_log format ["[GFL Settings] GFL_CorvusLoadout_Hostile changed to %1", _value];
+    }
+] call CBA_fnc_addSetting;
+
+[
+    "GFL_CorvusBuff_GnK",
+    "CHECKBOX",
+    ["GnK Rebel: Corvus Buff", "Apply the Corvus armor / coolant / movement buff to GnK rebel units. Reads the FCC backpack on the unit, so this only fires if the GnK has an FCC pack equipped."],
+    "GFL Antistasi",
+    [true],
+    1,
+    {
+        params ["_value"];
+        diag_log format ["[GFL Settings] GFL_CorvusBuff_GnK changed to %1", _value];
+    }
+] call CBA_fnc_addSetting;
+
+[
+    "GFL_CorvusBuff_Hostile",
+    "CHECKBOX",
+    ["Hostile Force: Corvus Buff", "Apply the Corvus armor / coolant / movement buff to hostile AI dolls. Hostile armor is scaled down per GFL_CorvusHostileArmor (130/90/60/40)."],
+    "GFL Antistasi",
+    [true],
+    1,
+    {
+        params ["_value"];
+        diag_log format ["[GFL Settings] GFL_CorvusBuff_Hostile changed to %1", _value];
     }
 ] call CBA_fnc_addSetting;
 
