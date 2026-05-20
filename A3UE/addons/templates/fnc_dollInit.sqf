@@ -16,16 +16,24 @@ GFL_DollResolveLastLogged = 0;
 // TacGirls. They must NEVER go through the face/outfit/weapon matcher — their identity is
 // hardcoded by the unit class itself, and Antistasi's random loadout assignment leaves
 // them holding the wrong weapon (e.g. an RHS rifle on Arges_F). For these units we skip
-// the matcher and force the canonical weapon.
+// the matcher and force the canonical Aegis weapon.
+//
+// EXCEPTION: when the player transforms TO Arges_F via GFL_fnc_argesTransform, the
+// resulting unit gets GFL_ArgesState = "ARGES" set immediately and inherits the player's
+// existing primary weapon. We must not overwrite that loadout. forceAegisWeapon bails on
+// any unit tagged "ARGES" so the player keeps what they were holding pre-transform.
 GFL_AegisExcludedBases = ["Arges_F", "Aegis_F", "Aegis_SWAP_F", "Steropes_F"];
 
-// Map base class -> canonical primary weapon. isKindOf walks the inheritance chain, so a
-// subclass of any of these gets the parent's weapon by default.
+// Map base class -> canonical-weapon fallback chain. Some weapon classes (argesGun,
+// steropesGun) may not be defined as standalone CfgWeapons entries in every TacGirls
+// version, so we list a chain and pick the first one that actually exists. aegisGun /
+// aegisswapGun are the safe lowest-common-denominator fallbacks. isKindOf walks the
+// inheritance chain, so a subclass of any of these picks up the parent's chain.
 GFL_AegisWeaponMap = createHashMapFromArray [
-    ["Arges_F",      "argesGun"],
-    ["Aegis_F",      "aegisGun"],
-    ["Aegis_SWAP_F", "aegisswapGun"],
-    ["Steropes_F",   "steropesGun"]
+    ["Arges_F",      ["argesGun",     "aegisGun"]],
+    ["Aegis_F",      ["aegisGun"]],
+    ["Aegis_SWAP_F", ["aegisswapGun", "aegisGun"]],
+    ["Steropes_F",   ["steropesGun",  "aegisGun"]]
 ];
 
 GFL_fnc_isAegisUnit = {
@@ -40,19 +48,29 @@ GFL_fnc_isAegisUnit = {
 GFL_fnc_forceAegisWeapon = {
     params ["_unit"];
     if (!alive _unit || !local _unit) exitWith {};
+    if (isPlayer _unit) exitWith {};
+    // Skip player-transformed Arges (and the stashed TDoll, which carries the same tag).
+    // The transform script in fnc_argesTransform.sqf hand-grafts the player's loadout onto
+    // the new Arges_F — overwriting that here would strip whatever weapon the player was
+    // carrying pre-transform.
+    if (_unit getVariable ["GFL_ArgesState", "NONE"] != "NONE") exitWith {};
     if (_unit getVariable ["GFL_AegisWeaponDone", false]) exitWith {};
 
-    // Find the most-specific matching base class (iterate in declared order — most
-    // derived first if we want, but isKindOf catches anything in the chain).
-    private _weapon = "";
+    // Resolve the weapon-fallback chain for this unit's base class.
+    private _chain = [];
     {
         if (_unit isKindOf _x) exitWith {
-            _weapon = GFL_AegisWeaponMap getOrDefault [_x, ""];
+            _chain = GFL_AegisWeaponMap getOrDefault [_x, []];
         };
     } forEach GFL_AegisExcludedBases;
-    if (_weapon isEqualTo "") exitWith {};
-    if (!isClass (configFile >> "CfgWeapons" >> _weapon)) exitWith {
-        diag_log format ["[GFL DollInit] Aegis weapon class %1 missing in CfgWeapons — skipped", _weapon];
+    if (_chain isEqualTo []) exitWith {};
+
+    private _weapon = "";
+    {
+        if (isClass (configFile >> "CfgWeapons" >> _x)) exitWith { _weapon = _x };
+    } forEach _chain;
+    if (_weapon isEqualTo "") exitWith {
+        diag_log format ["[GFL DollInit] Aegis weapon chain %1 — no class exists in CfgWeapons; unit %2 kept default loadout", _chain, _unit];
     };
 
     private _current = primaryWeapon _unit;
@@ -628,6 +646,11 @@ GFL_fnc_isDollUnitStillResolved = {
 GFL_fnc_processDollUnit = {
     params ["_unit"];
     if (!alive _unit || isPlayer _unit || !local _unit) exitWith {};
+    // Player-transformed Arges (and the matching stashed TDoll) carry GFL_ArgesState ==
+    // "ARGES". Neither the matcher nor the Aegis-weapon override should touch them — the
+    // transform script (fnc_argesTransform.sqf) hand-grafts the player's full loadout
+    // onto the new body, and we must preserve it.
+    if (_unit getVariable ["GFL_ArgesState", "NONE"] != "NONE") exitWith {};
 
     // Aegis-family units (Arges_F / Aegis_F / Aegis_SWAP_F / Steropes_F + subclasses):
     // skip the matcher entirely, just force the canonical Aegis weapon. Their identity
