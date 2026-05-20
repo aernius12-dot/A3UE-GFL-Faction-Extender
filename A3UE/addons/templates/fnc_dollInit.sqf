@@ -11,6 +11,100 @@ diag_log "[GFL DollInit] registering face/uniform and ELMO weapon resolver";
 GFL_DollResolveCount = 0;
 GFL_DollResolveLastLogged = 0;
 
+// ---------- Aegis-family exclusion ----------
+// Arges_F / Aegis_F / Aegis_SWAP_F / Steropes_F are bespoke heavy-combat T-Doll frames in
+// TacGirls. They must NEVER go through the face/outfit/weapon matcher — their identity is
+// hardcoded by the unit class itself, and Antistasi's random loadout assignment leaves
+// them holding the wrong weapon (e.g. an RHS rifle on Arges_F). For these units we skip
+// the matcher and force the canonical weapon.
+GFL_AegisExcludedBases = ["Arges_F", "Aegis_F", "Aegis_SWAP_F", "Steropes_F"];
+
+// Map base class -> canonical primary weapon. isKindOf walks the inheritance chain, so a
+// subclass of any of these gets the parent's weapon by default.
+GFL_AegisWeaponMap = createHashMapFromArray [
+    ["Arges_F",      "argesGun"],
+    ["Aegis_F",      "aegisGun"],
+    ["Aegis_SWAP_F", "aegisswapGun"],
+    ["Steropes_F",   "steropesGun"]
+];
+
+GFL_fnc_isAegisUnit = {
+    params ["_unit"];
+    private _hit = false;
+    {
+        if (_unit isKindOf _x) exitWith { _hit = true };
+    } forEach GFL_AegisExcludedBases;
+    _hit
+};
+
+GFL_fnc_forceAegisWeapon = {
+    params ["_unit"];
+    if (!alive _unit || !local _unit) exitWith {};
+    if (_unit getVariable ["GFL_AegisWeaponDone", false]) exitWith {};
+
+    // Find the most-specific matching base class (iterate in declared order — most
+    // derived first if we want, but isKindOf catches anything in the chain).
+    private _weapon = "";
+    {
+        if (_unit isKindOf _x) exitWith {
+            _weapon = GFL_AegisWeaponMap getOrDefault [_x, ""];
+        };
+    } forEach GFL_AegisExcludedBases;
+    if (_weapon isEqualTo "") exitWith {};
+    if (!isClass (configFile >> "CfgWeapons" >> _weapon)) exitWith {
+        diag_log format ["[GFL DollInit] Aegis weapon class %1 missing in CfgWeapons — skipped", _weapon];
+    };
+
+    private _current = primaryWeapon _unit;
+    if (_current isEqualTo _weapon) exitWith {
+        _unit setVariable ["GFL_AegisWeaponDone", true, true];
+    };
+
+    if (_current != "") then { _unit removeWeaponGlobal _current };
+    _unit addWeaponGlobal _weapon;
+
+    // Stock with the weapon's default magazine.
+    private _mags = getArray (configFile >> "CfgWeapons" >> _weapon >> "magazines");
+    if !(_mags isEqualTo []) then {
+        private _mag = _mags # 0;
+        _unit addPrimaryWeaponItem _mag;
+        for "_i" from 1 to 6 do { _unit addMagazine _mag };
+    };
+
+    _unit setVariable ["GFL_AegisWeaponDone", true, true];
+    diag_log format ["[GFL DollInit] Aegis weapon forced unit=%1 type=%2 weapon=%3", _unit, typeOf _unit, _weapon];
+};
+
+// ---------- Faction-aware gate ----------
+// Antistasi stores the selected faction class per side as A3A_Occ_template (WEST),
+// A3A_Inv_template (EAST), A3A_Reb_template (RESISTANCE). The matcher should only run
+// for sides whose active faction belongs to this mod (class starts with "GFL_"). This
+// stops the resolver from mangling faces on units that come from non-GFL factions
+// (e.g. FIA rebels paired with ELMO occupant — only ELMO should be matched).
+GFL_FactionGFLBySide = createHashMap;
+
+GFL_fnc_isGFLFactionForSide = {
+    params ["_side"];
+    private _cached = GFL_FactionGFLBySide getOrDefault [_side, -1];
+    if (_cached isEqualType true) exitWith { _cached };
+
+    private _templateVar = switch (_side) do {
+        case west:       { "A3A_Occ_template" };
+        case east:       { "A3A_Inv_template" };
+        case resistance: { "A3A_Reb_template" };
+        default          { "" };
+    };
+    if (_templateVar isEqualTo "") exitWith { false };
+
+    private _faction = missionNamespace getVariable [_templateVar, ""];
+    // Empty string means Antistasi hasn't loaded faction templates yet — don't cache.
+    if (_faction isEqualTo "") exitWith { false };
+
+    private _isGFL = (_faction find "GFL_") isEqualTo 0;
+    GFL_FactionGFLBySide set [_side, _isGFL];
+    _isGFL
+};
+
 GFL_FaceUniformMap = createHashMapFromArray [
     ["alvaface", "alva_uniform"], ["balthildeface", "balthilde_uniform"],
     ["bastiface", "basti_uniform"], ["centaureissiface", "centaureissi_uniform"],
@@ -435,7 +529,11 @@ GFL_fnc_isElmoUnit = {
     // ELMO can be used as either Occupant or Invader, so allow both military AI sides.
     // Keeping this off resistance/civilian prevents the ELMO weapon resolver from
     // touching GnK rebels, which intentionally share the same TacGirls identities.
-    if !((side group _unit) in [west, east]) exitWith { false };
+    private _side = side group _unit;
+    if !(_side in [west, east]) exitWith { false };
+    // Only run on units whose side's active faction is one of ours. Without this check
+    // a non-GFL faction on the opposite side (e.g. CSAT vs ELMO) would also be scanned.
+    if !([_side] call GFL_fnc_isGFLFactionForSide) exitWith { false };
     (toLower (face _unit) in GFL_ElmoFaceKeys) || (uniform _unit in GFL_ElmoUniforms)
 };
 
@@ -530,6 +628,15 @@ GFL_fnc_isDollUnitStillResolved = {
 GFL_fnc_processDollUnit = {
     params ["_unit"];
     if (!alive _unit || isPlayer _unit || !local _unit) exitWith {};
+
+    // Aegis-family units (Arges_F / Aegis_F / Aegis_SWAP_F / Steropes_F + subclasses):
+    // skip the matcher entirely, just force the canonical Aegis weapon. Their identity
+    // is the unit class itself — face/uniform must not be touched.
+    if ([_unit] call GFL_fnc_isAegisUnit) exitWith {
+        [_unit] call GFL_fnc_forceAegisWeapon;
+        _unit setVariable ["GFL_DollInitDone", true];
+    };
+
     if ([_unit] call GFL_fnc_isDollUnitStillResolved) exitWith {};
     _unit setVariable ["GFL_DollInitDone", false];
 
@@ -538,6 +645,12 @@ GFL_fnc_processDollUnit = {
             _unit setVariable ["GFL_DollInitDone", true];
         };
     };
+
+    // Resistance / civilian fallback path (used by GnK rebels): only run when the unit's
+    // side has a GFL faction active. Without this, FIA-or-similar rebels paired with an
+    // ELMO occupant would get their faces touched.
+    private _side = side group _unit;
+    if (_side in [resistance, civilian] && {!([_side] call GFL_fnc_isGFLFactionForSide)}) exitWith {};
 
     if ([_unit] call GFL_fnc_applyFaceUniformFromCurrentFace) then {
         _unit setVariable ["GFL_DollInitDone", true];

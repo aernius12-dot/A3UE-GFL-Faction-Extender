@@ -160,9 +160,10 @@ if (isClass (configFile >> "cfgVehicles" >> "rhs_D30_vdv")) then {
 /////////////////////
 
 ["faces", [
-    // tacgirls_elmo (27)
+    // tacgirls_elmo (25 — commandermaleface / commanderfemaleface deliberately excluded
+    // so ELMO units never spawn with the Petros-style commander identity)
     "alvaface", "balthildeface", "bastiface", "centaureissiface",
-    "cheetaface", "cheyanneface", "commanderfemaleface", "commandermaleface",
+    "cheetaface", "cheyanneface",
     "grozaface", "harpsyface", "helenface", "jiangyuface",
     "klukaiface", "lainiealtface", "Levaface", "lindface",
     "littaraface", "liushihface", "lottaface", "makiattoface",
@@ -193,9 +194,10 @@ private _loadoutData = call _fnc_createLoadoutData;
 // TacGirls uniforms ARE the T-Doll character models — equipping one swaps the full body mesh.
 // ELMO uses bc036 Invisible Gear only for vests/headgear so the dolls keep their full model silhouettes.
 private _uniforms = [
-    // tacgirls_elmo (27)
+    // tacgirls_elmo (25 — commandermale_uniform / commanderfemale_uniform deliberately
+    // excluded so ELMO units never visually appear as the rebel commander silhouette)
     "alva_uniform", "balthilde_uniform", "basti_uniform", "centaureissi_uniform",
-    "cheeta_uniform", "cheyanne_uniform", "commanderfemale_uniform", "commandermale_uniform",
+    "cheeta_uniform", "cheyanne_uniform",
     "groza_uniform", "harpsy_uniform", "helen_uniform", "jiangyu_uniform",
     "klukai_uniform", "lainiealt_uniform", "Leva_uniform", "lind_uniform",
     "littara_uniform", "liushih_uniform", "lotta_uniform", "makiatto_uniform",
