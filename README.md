@@ -75,6 +75,7 @@ some feature able to be toggled on and off, because it might be heavy for server
 - Signing file for multiplayer
 - flags for other faction (I am a bit lazy)
 - Logos or icons for stuff that needed it (I am lazy)
+- removing vanilla/template stuff from the repo (forgot to do it)
 
 ---
 
@@ -107,6 +108,7 @@ Requires PowerShell and the Arma 3 Tools (Addon Builder / DSSignFile) to be inst
 - Official Antistasi Community and all contributors for [Antistasi Community Edition](https://steamcommunity.com/sharedfiles/filedetails/?id=2867537125).
 - Socrates for [Antistasi Plus](https://steamcommunity.com/sharedfiles/filedetails/?id=2912941775).
 - The Antistasi Ultimate Dev Team and all contributors for [Antistasi Ultimate](https://steamcommunity.com/sharedfiles/filedetails/?id=3020755032).
+- Silence112 for [A3UE template](https://github.com/Westalgie/A3UExtender)
 - Utage for [TacGirls - GFL Mod](https://steamcommunity.com/sharedfiles/filedetails/?id=3722505664).
 - Luca for [Sci-Fi Vehicles Pack](https://steamcommunity.com/sharedfiles/filedetails/?id=3539476763).
 - Phaenosi for [Sci-Fi Turret Pack](https://steamcommunity.com/sharedfiles/filedetails/?id=3712115907).
